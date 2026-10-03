@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="/WordifyFlutter/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Wordify Web Application">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0A1128">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Wordify">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/Icon-512.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Wordify</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    :root {
+      --pwa-bg-color: #0A1128;
+      --pwa-accent-color: #3A86FF;
+      --pwa-text-color: #8899AA;
+    }
+    body {
+      background-color: var(--pwa-bg-color);
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      user-select: none;
+    }
+    .web-loader-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+    }
+    .splash-icon-wrapper {
+      position: relative;
+      width: 112px;
+      height: 112px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      filter: drop-shadow(0 10px 30px rgba(58, 134, 255, 0.25));
+      animation: splash-pulse 2.4s ease-in-out infinite;
+    }
+    .splash-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .web-loading-bar {
+      width: 120px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+      margin-top: 6px;
+    }
+    .web-loading-progress {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 40%;
+      background: linear-gradient(90deg, transparent, var(--pwa-accent-color), transparent);
+      border-radius: 3px;
+      animation: web-loading 1.4s ease-in-out infinite;
+    }
+    .web-loading-text {
+      margin-top: 14px;
+      color: var(--pwa-text-color);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 2px;
+    }
+    @keyframes splash-pulse {
+      0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 8px 24px rgba(58, 134, 255, 0.2));
+      }
+      50% {
+        transform: scale(1.04);
+        filter: drop-shadow(0 12px 36px rgba(58, 134, 255, 0.4));
+      }
+    }
+    @keyframes web-loading {
+      0% { left: -40%; }
+      100% { left: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="web-loader-container">
+    <div class="splash-icon-wrapper">
+      <svg class="splash-svg" viewBox="-6 -6 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="-6" y="-6" width="36" height="36" rx="8" fill="#0A1128"/>
+        <path d="M12 9.7998V19.9998M12 9.7998C12 8.11965 12 7.27992 12.327 6.63818C12.6146 6.0737 13.0732 5.6146 13.6377 5.32698C14.2794 5 15.1196 5 16.7998 5H19.3998C19.9599 5 20.2401 5 20.454 5.10899C20.6422 5.20487 20.7948 5.35774 20.8906 5.5459C20.9996 5.75981 21 6.04004 21 6.6001V15.4001C21 15.9601 20.9996 16.2398 20.8906 16.4537C20.7948 16.6419 20.6425 16.7952 20.4543 16.8911C20.2406 17 19.961 17 19.402 17H16.5693C15.6301 17 15.1597 17 14.7334 17.1295C14.356 17.2441 14.0057 17.4317 13.701 17.6821C13.3568 17.965 13.096 18.3557 12.575 19.1372L12 19.9998M12 9.7998C12 8.11965 11.9998 7.27992 11.6729 6.63818C11.3852 6.0737 10.9263 5.6146 10.3618 5.32698C9.72004 5 8.87977 5 7.19961 5H4.59961C4.03956 5 3.75981 5 3.5459 5.10899C3.35774 5.20487 3.20487 5.35774 3.10899 5.5459C3 5.75981 3 6.04004 3 6.6001V15.4001C3 15.9601 3 16.2398 3.10899 16.4537C3.20487 16.6419 3.35774 16.7952 3.5459 16.8911C3.7596 17 4.03901 17 4.59797 17H7.43073C8.36994 17 8.83942 17 9.26569 17.1295C9.64306 17.2441 9.99512 17.4317 10.2998 17.6821C10.6426 17.9638 10.9017 18.3526 11.4185 19.1277L12 19.9998" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16 14.2L17.9 20.2L20 16.2L22.1 20.2L24 14.2" stroke="#0A1128" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16 14.2L17.9 20.2L20 16.2L22.1 20.2L24 14.2" stroke="#3A86FF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="web-loading-bar">
+      <div class="web-loading-progress"></div>
+    </div>
+    <div class="web-loading-text">WORDIFY</div>
+  </div>
+
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

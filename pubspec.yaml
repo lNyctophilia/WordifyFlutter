@@ -1,0 +1,39 @@
+name: wordify
+description: "Wordify Web Application"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  intl: ^0.20.2
+  http: ^1.6.0
+
+  # Firebase
+  firebase_core: ^3.13.0
+  firebase_auth: ^5.6.0
+  cloud_firestore: ^5.6.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  web:
+    generate: true
+    image_path: "icon.png"
+    background_color: "#0A1128"
+    theme_color: "#0A1128"
+  image_path: "icon.png"
+
+flutter:
+  uses-material-design: true
