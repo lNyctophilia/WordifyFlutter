@@ -5,6 +5,15 @@ echo   Wordify - Web Build ve Deploy
 echo ===================================
 echo.
 
+REM 0. Versiyon Bilgisini Guncelle
+echo [0/3] Versiyon bilgisi guncelleniyor...
+call dart run scripts\update_version.dart
+if errorlevel 1 (
+    echo HATA: Versiyon guncelleme basarisiz!
+    pause
+    exit /b 1
+)
+
 REM 1. Flutter Web Build
 echo [1/3] Flutter Web build aliniyor...
 call flutter build web --release --base-href "/WordifyFlutter/"
@@ -37,3 +46,6 @@ echo ===================================
 echo   WEB DEPLOY TAMAMLANDI!
 echo   Site: https://lnyctophilia.github.io/WordifyFlutter/
 echo ===================================
+echo.
+pause
+

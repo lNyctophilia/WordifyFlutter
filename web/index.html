@@ -127,6 +127,36 @@
     <div class="web-loading-text">WORDIFY</div>
   </div>
 
+  <script>
+    window.clearCacheAndReload = async function() {
+      try {
+        if ('caches' in window) {
+          const cacheKeys = await caches.keys();
+          await Promise.all(cacheKeys.map(key => caches.delete(key)));
+        }
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const reg of registrations) {
+            await reg.unregister();
+          }
+        }
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i];
+          const eqPos = cookie.indexOf("=");
+          const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+          document.cookie = name.trim() + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+        }
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch (e) {}
+      } catch (e) {
+        console.error("Cache clear error:", e);
+      }
+      window.location.reload(true);
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
