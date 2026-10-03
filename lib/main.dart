@@ -189,7 +189,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Firebase bağlantısı hazır. Web uygulaması geliştirilmeye uygun.',
+                        'Proje geliştirilmeye hazır.',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: Colors.white70,
@@ -215,7 +215,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                             ),
                             SizedBox(width: 8),
                             Text(
-                              'Firebase (wordify-58603) Bağlandı',
+                              'Firebase Bağlandı',
                               style: TextStyle(
                                 color: Colors.green,
                                 fontSize: 13,
