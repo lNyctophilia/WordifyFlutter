@@ -24301,7 +24301,7 @@ if(m.b===200){h=m
 l=t.a.a(B.cq.Ok(A.aKo(A.aI3(h.e)).ep(h.w),null))
 g=A.aa(J.mz(l,"fullVersion"))
 k=g==null?"":g
-j="Versiyon (05.10.2026-02.31)"
+j="Versiyon (05.10.2026-02.54)"
 if(J.cF(k)!==0&&!J.d(k,j)){if(a.e!=null)A.aG9(a,k)}else if(b&&a.e!=null)a.ab(t.Pu).f.Tq(B.M9)}p=2
 s=6
 break
@@ -76353,7 +76353,7 @@ l=l.z
 l=A.fG("Proje geli\u015ftirilmeye haz\u0131r.",q,l==null?q:l.dW(B.w),B.bu)
 s=B.f7.ds(0.1)
 r=A.eD(12)
-return A.anA(new A.uR(n,0,B.C,new A.PT(q,q,1/0,56),q),q,A.op(!0,A.fX(A.c([A.GQ(A.pT(A.eG(q,A.fX(A.c([m,B.fD,k,B.LW,l,B.fD,A.eG(q,B.K4,B.u,q,new A.cv(s,q,A.jm(B.f7.ds(0.5),1),r,q,q,B.au),q,q,q,B.lo,q,q,q)],o),B.a3,B.dN,B.a9),B.u,B.yn,q,q,q,q,B.Cb,q,q,q),q,q)),new A.ci(B.BY,A.fG("Versiyon (05.10.2026-02.31)",q,A.lT(q,q,B.i.ds(0.35),q,q,q,q,q,"monospace",q,q,12,q,q,q,q,q,!0,q,0.5,q,q,q,q,q,q),q),q)],o),B.a3,B.S,B.a9),B.Z,!0))}}
+return A.anA(new A.uR(n,0,B.C,new A.PT(q,q,1/0,56),q),q,A.op(!0,A.fX(A.c([A.GQ(A.pT(A.eG(q,A.fX(A.c([m,B.fD,k,B.LW,l,B.fD,A.eG(q,B.K4,B.u,q,new A.cv(s,q,A.jm(B.f7.ds(0.5),1),r,q,q,B.au),q,q,q,B.lo,q,q,q)],o),B.a3,B.dN,B.a9),B.u,B.yn,q,q,q,q,B.Cb,q,q,q),q,q)),new A.ci(B.BY,A.fG("Versiyon (05.10.2026-02.54)",q,A.lT(q,q,B.i.ds(0.35),q,q,q,q,q,"monospace",q,q,12,q,q,q,q,q,!0,q,0.5,q,q,q,q,q,q),q),q)],o),B.a3,B.S,B.a9),B.Z,!0))}}
 A.ajS.prototype={
 $1(a){var s=this.a.c
 s.toString
@@ -76380,7 +76380,7 @@ q=q.b
 B.b.J(j,A.c([A.eG(m,A.on(A.c([new A.Fo(o,B.a2,p,20,m),B.fC,A.GQ(A.fX(A.c([n,B.LX,A.fG(q==null?"":q,B.bv,B.No,m)],k),B.az,B.S,B.a9))],k),B.a3,B.S,B.a9,0),B.u,m,new A.cv(B.di,m,r,s,m,m,B.au),m,m,B.BW,B.hM,m,m,m)],k))}j.push(B.Rt)
 j.push(B.wI)
 j.push(A.I_(B.Z,B.CX,new A.ajK(),B.Rr,B.Rl))
-j.push(A.I_(B.Z,B.D2,m,A.fG("Versiyon (05.10.2026-02.31)",m,B.Nu,m),B.Ro))
+j.push(A.I_(B.Z,B.D2,m,A.fG("Versiyon (05.10.2026-02.54)",m,B.Nu,m),B.Ro))
 s=this.a
 j.push(A.I_(B.Z,B.D9,new A.ajL(s,a),B.Rm,B.Rp))
 j.push(A.I_(B.Z,B.D3,new A.ajM(s),B.Rz,B.Rj))
@@ -76416,7 +76416,7 @@ $0(){return this.a.a66(this.b)},
 $S:0}
 A.abC.prototype={
 $1(a){var s=null,r=A.eD(16),q=A.eD(8),p=A.jm(B.kY,1),o=t.E
-return A.asP(!1,A.aq8(B.Fm,B.eu,A.fX(A.c([B.Rv,B.ju,A.eG(s,A.fX(A.c([A.fG("Mevcut: Versiyon (05.10.2026-02.31)",s,B.e6,s),B.LZ,A.fG("Yeni: "+this.a,s,B.QI,s)],o),B.az,B.S,B.a9),B.u,s,new A.cv(B.Ap,s,p,q,s,s,B.au),s,s,s,B.hM,s,s,1/0)],o),B.az,B.S,B.bH),new A.cx(r,B.yf),B.K2),s,t.z)},
+return A.asP(!1,A.aq8(B.Fm,B.eu,A.fX(A.c([B.Rv,B.ju,A.eG(s,A.fX(A.c([A.fG("Mevcut: Versiyon (05.10.2026-02.54)",s,B.e6,s),B.LZ,A.fG("Yeni: "+this.a,s,B.QI,s)],o),B.az,B.S,B.a9),B.u,s,new A.cv(B.Ap,s,p,q,s,s,B.au),s,s,s,B.hM,s,s,1/0)],o),B.az,B.S,B.bH),new A.cx(r,B.yf),B.K2),s,t.z)},
 $S:525}
 A.Dv.prototype={
 aj(){return new A.S1()}}

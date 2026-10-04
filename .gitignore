@@ -130,4 +130,28 @@ desktop/bin/
 desktop/obj/
 release/
 *.exe
+
+# IDEs and Editors
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# Visual Studio & Windows Build
+.vs/
+**/[Bb]in/
+**/[Oo]bj/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
 

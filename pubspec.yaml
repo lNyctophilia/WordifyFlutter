@@ -30,10 +30,10 @@ dev_dependencies:
 flutter_launcher_icons:
   web:
     generate: true
-    image_path: "icon.png"
+    image_path: "assets/icon.png"
     background_color: "#0A1128"
     theme_color: "#0A1128"
-  image_path: "icon.png"
+  image_path: "assets/icon.png"
 
 flutter:
   uses-material-design: true
