@@ -6,143 +6,48 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    // Rol kontrolü
     function hasRole(role) {
       return request.auth != null && role in getUserData().roles;
     }
 
-    // Yetki kontrolü (yeni permissions sistemi)
-    function hasPermission(perm) {
-      let data = getUserData();
-      return request.auth != null && 
-             data.keys().hasAll(['permissions']) && 
-             perm in data.permissions;
-    }
-    
     function isOwner() {
       return hasRole('owner');
     }
-    
-    function isManager() {
-      return hasRole('manager') || hasRole('managerA1') || hasRole('managerA2') || hasRole('managerA3');
-    }
 
-    // Yetki bazlı kontroller
-    function hasManagerPermission() {
-      return isOwner() || isManager() || hasPermission('manager');
-    }
-
-    function hasAdminPermission() {
-      return isOwner() || hasPermission('admin');
-    }
-
-    function hasProtectedRole(rolesList) {
-      return 'owner' in rolesList || 'manager' in rolesList || 'managerA1' in rolesList || 'managerA2' in rolesList || 'managerA3' in rolesList;
+    function isAdmin() {
+      return isOwner() || hasRole('admin');
     }
 
     match /users/{userId} {
-      // Personel kendi profilini, yönetici/admin yetkisi olanlar herkesi okuyabilir
-      allow read: if hasAdminPermission() || hasManagerPermission() || request.auth.uid == userId;
+      // Kullanıcı kendi profilini, yönetici/admin herkesi okuyabilir
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
       
-      // SADECE admin yetkisi olanlar herkesi silebilir. Yönetici yetkisi olanlar SADECE personeli silebilir.
-      allow delete: if hasAdminPermission() || (
-        hasManagerPermission() && 
-        !hasProtectedRole(resource.data.roles)
-      );
-      
-      // Kayıt olma (create) kuralı: Admin yetkisi olanlar herkesi oluşturabilir.
-      // Yönetici yetkisi olanlar sadece 'staff' oluşturabilir.
-      allow create: if hasAdminPermission() || (
-        hasManagerPermission() && 
-        !hasProtectedRole(request.resource.data.roles) &&
-        !('permissions' in request.resource.data)
-      ) || (
-        request.auth != null && 
+      // İlk kayıt: kullanıcı kendi uid'si ile 'staff' rolünde kayıt açabilir
+      allow create: if request.auth != null && 
         request.auth.uid == userId &&
         request.resource.data.isApproved == false &&
         request.resource.data.roles.size() == 1 &&
-        request.resource.data.roles[0] == 'staff' &&
-        !('permissions' in request.resource.data)
-      );
-      
-      // Admin yetkisi olanlar herkesi güncelleyebilir (permissions dahil).
-      // Yönetici yetkisi olanlar ise diğer Manager/Owner'ları güncelleyemez ve kimseye korumalı rol veremez.
-      // Normal kullanıcılar sadece kendi izin verilen alanlarını güncelleyebilir.
-      allow update: if hasAdminPermission() || 
-        (
-          hasManagerPermission() && 
-          !hasProtectedRole(resource.data.roles) &&
-          !hasProtectedRole(request.resource.data.roles) &&
-          // Yönetici yetkisi olanlar permissions alanını değiştiremez
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['permissions'])
-        ) || 
+        request.resource.data.roles[0] == 'staff';
+
+      // Güncelleme: Admin herkesi, kullanıcı ise sadece kendi oturum ve profil bilgilerini güncelleyebilir
+      allow update: if request.auth != null && (
+        isAdmin() || 
         (
           request.auth.uid == userId && 
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmToken', 'sessionId', 'fcmError', 'sayimReminderEnabled', 'pushVersion', 'fcmTokenInvalidatedAt', 'fcmTokenInvalidReason']) &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['softDeletedAt'])
-        ) ||
-        (
-          // Kullanıcının kendi hesabını soft-delete yapmasına izin ver
-          request.auth.uid == userId &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['softDeletedAt'])
-        ) ||
-        (
-          // Kullanıcının kendi hesabını hard-delete yapmasına izin ver
-          request.auth.uid == userId &&
-          request.resource.data.isDeleted == true &&
-          request.resource.data.active == false &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isDeleted', 'active', 'username', 'phone'])
-        );
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'lastLoginAt', 'displayName', 'photoURL', 'fcmToken', 'sessionId'
+          ])
+        )
+      );
+
+      // Sadece admin silebilir
+      allow delete: if request.auth != null && isAdmin();
     }
 
-    match /sayimlar/{sayimId} {
-      // Yönetici veya Admin yetkisi olanlar tüm sayımları okuyabilir. Davet edilenler de okuyabilir.
-      allow read: if hasManagerPermission() || hasAdminPermission() || (request.auth != null && request.auth.uid in resource.data.invitedUserIds);
-      allow create: if hasManagerPermission() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if hasAdminPermission() || hasManagerPermission() ||
-        (
-          request.auth != null && 
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['invitedUserIds']) &&
-          request.resource.data.invitedUserIds == resource.data.invitedUserIds.removeAll([request.auth.uid])
-        );
-      allow delete: if hasAdminPermission() || hasManagerPermission();
-    }
-
+    // Wordify genel sistem ayarları
     match /settings/{document} {
       allow read: if request.auth != null;
-      // Sadece admin yetkisi olanlar ayarları değiştirebilir
-      allow write: if hasAdminPermission();
-    }
-
-    match /davetler/{davetId} {
-      // Personel kendi davetlerini okuyabilir. Yönetici/Admin hepsini görebilir.
-      allow read: if hasManagerPermission() || hasAdminPermission() || (request.auth != null && resource.data.userId == request.auth.uid);
-      // Personel kendi davet durumunu güncelleyebilir
-      allow update: if hasManagerPermission() || hasAdminPermission() || (
-        request.auth != null && 
-        resource.data.userId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt'])
-      );
-      // Davet oluşturma/silme yönetici yetkisi gerektirir
-      allow create, delete: if hasManagerPermission() || hasAdminPermission();
-    }
-
-    match /personel_takvimi/{userId}/gunler/{tarih} {
-      // Yönetici/Admin tüm takvimleri okuyup yazabilir. Personel kendi takvimini.
-      allow read, write: if hasManagerPermission() || hasAdminPermission() || request.auth.uid == userId;
-    }
-
-    match /fcm_tokens/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    match /test_notifications/{docId} {
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-    }
-
-    match /notifications/{docId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if request.auth != null && isAdmin();
     }
   }
 }

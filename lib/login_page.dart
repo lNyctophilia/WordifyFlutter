@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -12,8 +14,31 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  // TODO: Kullanıcı linki verdiğinde bu URL güncellenecek
+  static const String _termsUrl = 'https://example.com/terms';
+
   bool _isLoading = false;
   String? _errorMessage;
+  late final TapGestureRecognizer _termsRecognizer;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsRecognizer = TapGestureRecognizer()..onTap = _openTerms;
+  }
+
+  @override
+  void dispose() {
+    _termsRecognizer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openTerms() async {
+    final uri = Uri.parse(_termsUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   Future<void> _handleGoogleSignIn() async {
     setState(() {
@@ -33,15 +58,19 @@ class _LoginPageState extends State<LoginPage> {
             _errorMessage = 'Giriş penceresi kapatıldı.';
           } else if (e.code == 'cancelled') {
             _errorMessage = 'Giriş işlemi iptal edildi.';
+          } else if (e.code == 'unauthorized-domain') {
+            _errorMessage = 'Yetkisiz alan adı: Firebase Console > Auth > Settings > Authorized domains altına lnyctophilia.github.io eklenmelidir.';
+          } else if (e.code == 'operation-not-allowed') {
+            _errorMessage = 'Google ile giriş Firebase Console üzerinde henüz aktif edilmemiş.';
           } else {
-            _errorMessage = 'Giriş başarısız: ${e.message ?? e.code}';
+            _errorMessage = 'Giriş başarısız [${e.code}]: ${e.message ?? ''}';
           }
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          _errorMessage = 'Hata: ${e.toString().replaceFirst('Exception: ', '')}';
         });
       }
     } finally {
@@ -73,7 +102,6 @@ class _LoginPageState extends State<LoginPage> {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3A86FF).withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: const Color(0xFF3A86FF),
@@ -87,10 +115,13 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.text_fields_rounded,
-                      size: 40,
-                      color: Color(0xFF3A86FF),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/icon.png',
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -145,17 +176,7 @@ class _LoginPageState extends State<LoginPage> {
                             color: Colors.white,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Google hesabınızla tek tıkla yeni hesap oluşturabilir veya mevcut hesabınıza bağlanabilirsiniz.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.white60,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
+                         const SizedBox(height: 24),
 
                         // Error Banner
                         if (_errorMessage != null) ...[
@@ -237,50 +258,42 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
 
-                        const SizedBox(height: 20),
 
-                        // Features List
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0A1128).withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.04),
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              _buildInfoRow(
-                                icon: Icons.devices_rounded,
-                                text: 'PC ve mobilde senkronize oturum',
-                              ),
-                              const SizedBox(height: 8),
-                              _buildInfoRow(
-                                icon: Icons.verified_user_outlined,
-                                text: 'Şifresiz ve onay beklemeden güvenli giriş',
-                              ),
-                              const SizedBox(height: 8),
-                              _buildInfoRow(
-                                icon: Icons.shield_outlined,
-                                text: 'Sürekli hesap açma ve kötüye kullanma korumalı',
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ),
 
                   const SizedBox(height: 24),
 
-                  // Bottom info
-                  Text(
-                    'Giriş yaparak Wordify Kullanım Koşullarını kabul etmiş olursunuz.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white30,
-                      fontSize: 11,
+                  // Bottom info (~%75 kutu genişliği ve tıklanabilir link)
+                  SizedBox(
+                    width: 330,
+                    child: Text.rich(
+                      TextSpan(
+                        text: 'Giriş yaparak ',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white38,
+                          fontSize: 11,
+                          height: 1.5,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: 'Wordify Kullanım Koşulları',
+                            style: const TextStyle(
+                              color: Color(0xFF60A5FA),
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                              decorationColor: Color(0xFF60A5FA),
+                            ),
+                            mouseCursor: SystemMouseCursors.click,
+                            recognizer: _termsRecognizer,
+                          ),
+                          const TextSpan(
+                            text: '\'nı kabul etmiş olursunuz.',
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ],
@@ -289,29 +302,6 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildInfoRow({required IconData icon, required String text}) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 16,
-          color: const Color(0xFF3A86FF),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ),
-      ],
     );
   }
 
