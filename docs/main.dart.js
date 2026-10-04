@@ -21016,7 +21016,7 @@ if(m.b===200){h=m
 l=t.a.a(B.cK.J4(A.ax7(A.avd(h.e)).dZ(h.w),null))
 g=A.bq(J.ns(l,"fullVersion"))
 k=g==null?"":g
-j="Versiyon (03.10.2026-22.09)"
+j="Versiyon (04.10.2026-14.55)"
 if(J.cD(k)!==0&&!J.c(k,j)){if(a.e!=null)A.atr(a,k)}else if(b&&a.e!=null)a.af(t.Pu).f.Ns(B.Iu)}p=2
 s=6
 break
@@ -64343,14 +64343,14 @@ l=l.z
 l=A.ws("Proje geli\u015ftirilmeye haz\u0131r.",l==null?q:l.ex(B.w),B.dF)
 s=B.eF.lj(0.1)
 r=A.kX(12)
-return new A.vJ(new A.qW(n,0,B.P,new A.K8(q,q,1/0,56),q),A.vH(!0,A.rp(A.d([A.afZ(A.P1(A.Bk(A.rp(A.d([m,B.vq,k,B.vp,l,B.vq,A.Bk(B.Gz,q,new A.dT(s,q,A.abA(B.eF.lj(0.5),1),r,q,q,B.bg),q,q,B.ku,q)],o),B.aw,B.ia,B.bj),B.wM,q,q,q,B.zX,q),q,q)),new A.cH(B.zO,A.ws("Versiyon (03.10.2026-22.09)",A.mK(q,q,B.i.lj(0.35),q,q,q,q,q,"monospace",q,q,12,q,q,q,q,q,!0,q,0.5,q,q,q,q,q,q),q),q)],o),B.aw,B.aj,B.bj),B.a6,!0),q)}}
+return new A.vJ(new A.qW(n,0,B.P,new A.K8(q,q,1/0,56),q),A.vH(!0,A.rp(A.d([A.afZ(A.P1(A.Bk(A.rp(A.d([m,B.vq,k,B.vp,l,B.vq,A.Bk(B.Gz,q,new A.dT(s,q,A.abA(B.eF.lj(0.5),1),r,q,q,B.bg),q,q,B.ku,q)],o),B.aw,B.ia,B.bj),B.wM,q,q,q,B.zX,q),q,q)),new A.cH(B.zO,A.ws("Versiyon (04.10.2026-14.55)",A.mK(q,q,B.i.lj(0.35),q,q,q,q,q,"monospace",q,q,12,q,q,q,q,q,!0,q,0.5,q,q,q,q,q,q),q),q)],o),B.aw,B.aj,B.bj),B.a6,!0),q)}}
 A.a9w.prototype={
 $1(a){var s=this.a.c
 s.toString
 A.G4(s,!1)},
 $S:7}
 A.a9u.prototype={
-$1(a){var s=null,r=A.kX(16),q=B.i.lj(0.1),p=t.E,o=A.rp(A.d([B.Nn,B.vp,A.Ut(B.a6,B.Av,new A.a9q(),B.Ns,B.Nw),A.Ut(B.a6,B.Ay,s,A.ws("Versiyon (03.10.2026-22.09)",B.JI,s),B.Np),A.Ut(B.a6,B.AE,new A.a9r(a,this.a),B.Nm,B.Nl),A.Ut(B.a6,B.Az,new A.a9s(a),B.Nr,B.Nq)],p),B.aP,B.aj,B.bK)
+$1(a){var s=null,r=A.kX(16),q=B.i.lj(0.1),p=t.E,o=A.rp(A.d([B.Nn,B.vp,A.Ut(B.a6,B.Av,new A.a9q(),B.Ns,B.Nw),A.Ut(B.a6,B.Ay,s,A.ws("Versiyon (04.10.2026-14.55)",B.JI,s),B.Np),A.Ut(B.a6,B.AE,new A.a9r(a,this.a),B.Nm,B.Nl),A.Ut(B.a6,B.Az,new A.a9s(a),B.Nr,B.Nq)],p),B.aP,B.aj,B.bK)
 return A.aeZ(A.d([new A.FO(new A.a9t(a),s,s,s,s,s,s,!1,s,!0,s,B.Nu,s)],p),B.jW,o,new A.cf(r,new A.bA(q,1,B.F,-1)),B.GA)},
 $S:438}
 A.a9q.prototype={
@@ -64373,7 +64373,7 @@ $0(){return this.a.YQ(this.b)},
 $S:0}
 A.a2U.prototype={
 $1(a){var s=null,r=A.kX(16),q=A.kX(8),p=A.abA(B.kb,1),o=t.E
-q=A.rp(A.d([B.Nz,B.Ik,A.Bk(A.rp(A.d([A.ws("Mevcut: Versiyon (03.10.2026-22.09)",B.fd,s),B.Il,A.ws("Yeni: "+this.a,B.MK,s)],o),B.aP,B.aj,B.bj),s,new A.dT(B.yA,s,p,q,s,s,B.bg),s,s,B.zR,1/0)],o),B.aP,B.aj,B.bK)
+q=A.rp(A.d([B.Nz,B.Ik,A.Bk(A.rp(A.d([A.ws("Mevcut: Versiyon (04.10.2026-14.55)",B.fd,s),B.Il,A.ws("Yeni: "+this.a,B.MK,s)],o),B.aP,B.aj,B.bj),s,new A.dT(B.yA,s,p,q,s,s,B.bg),s,s,B.zR,1/0)],o),B.aP,B.aj,B.bK)
 p=A.apO(B.aO,s,B.ku,new A.cf(A.kX(10),B.r),s)
 return A.ahf(!1,A.aeZ(A.d([new A.Ce(!0,new A.a2T(),s,s,s,p,B.S,s,!1,s,!0,s,new A.Ia(B.Nt,B.AB,p,s,s),s)],o),B.jW,q,new A.cf(r,B.wH),B.GB),s,t.z)},
 $S:439}
@@ -66819,7 +66819,7 @@ B.c8=new A.lv(0,"none")
 B.A7=new A.lv(1,"low")
 B.hN=new A.lv(2,"medium")
 B.kz=new A.lv(3,"high")
-B.A8=new A.o8("AIzaSyBKeYxD9VONGKwb1NF4hf-1KmFpKfJsXSs","1:773824098060:web:aebf612bc3c7f0786ca329","773824098060","wordify-58603","wordify-58603.firebaseapp.com",null,"wordify-58603.firebasestorage.app",null,null,null,null,null,null,null)
+B.A8=new A.o8("AIzaSyBKeYxD9VONGKwb1NF4hf-1KmFpKfJsXSs","1:773824098060:web:862d63b6a6b4b9906ca329","773824098060","wordify-58603","wordify-58603.firebaseapp.com",null,"wordify-58603.firebasestorage.app",null,null,null,null,null,null,null)
 B.kA=new A.Cj(0,"tight")
 B.kB=new A.Cj(1,"loose")
 B.A9=new A.tn(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
