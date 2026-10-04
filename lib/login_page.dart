@@ -127,17 +127,7 @@ class _LoginPageState extends State<LoginPage> {
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Tek hesapla hem PC hem mobilden anında erişin',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white60,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 32),
 
                   // Main Card
                   Container(

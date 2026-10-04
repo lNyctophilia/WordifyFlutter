@@ -123,4 +123,11 @@ app.*.symbols
 *.env
 lib/firebase_options.dart
 **/google-services.json
-**/GoogleService-Info.plist
+**/GoogleService-Info.plist
+
+# Desktop & Releases
+desktop/bin/
+desktop/obj/
+release/
+*.exe
+
