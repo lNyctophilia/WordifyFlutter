@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:web/web.dart' as web;
 import 'auth_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -18,24 +17,19 @@ class _LoginPageState extends State<LoginPage> {
 
   bool _isLoading = false;
   String? _errorMessage;
-  late final TapGestureRecognizer _termsRecognizer;
 
-  @override
-  void initState() {
-    super.initState();
-    _termsRecognizer = TapGestureRecognizer()..onTap = _openTerms;
-  }
-
-  @override
-  void dispose() {
-    _termsRecognizer.dispose();
-    super.dispose();
-  }
-
-  Future<void> _openTerms() async {
-    final uri = Uri.parse(_termsUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  void _openTerms() {
+    try {
+      final newWindow = web.window.open(_termsUrl, '_blank');
+      if (newWindow == null) {
+        web.window.location.href = _termsUrl;
+      }
+    } catch (_) {
+      try {
+        web.window.location.href = _termsUrl;
+      } catch (e) {
+        debugPrint('Link açılamadı: $e');
+      }
     }
   }
 
@@ -264,35 +258,59 @@ class _LoginPageState extends State<LoginPage> {
 
                   const SizedBox(height: 24),
 
-                  // Bottom info (~%75 kutu genişliği ve tıklanabilir link)
+                  // Bottom info (tıklanabilir ve geri bildirimli link)
                   SizedBox(
-                    width: 330,
-                    child: Text.rich(
-                      TextSpan(
-                        text: 'Giriş yaparak ',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white38,
-                          fontSize: 11,
-                          height: 1.5,
-                        ),
+                    width: 340,
+                    child: DefaultTextStyle(
+                      style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white38,
+                            fontSize: 11,
+                            height: 1.5,
+                          ) ??
+                          const TextStyle(color: Colors.white38, fontSize: 11),
+                      textAlign: TextAlign.center,
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          TextSpan(
-                            text: 'Wordify Kullanım Koşulları',
-                            style: const TextStyle(
-                              color: Color(0xFF60A5FA),
-                              fontWeight: FontWeight.w600,
-                              decoration: TextDecoration.underline,
-                              decorationColor: Color(0xFF60A5FA),
+                          const Text('Giriş yaparak '),
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: _openTerms,
+                              borderRadius: BorderRadius.circular(4),
+                              splashColor: const Color(0xFF60A5FA).withValues(alpha: 0.25),
+                              highlightColor: const Color(0xFF60A5FA).withValues(alpha: 0.15),
+                              hoverColor: const Color(0xFF60A5FA).withValues(alpha: 0.1),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Wordify Kullanım Koşulları\'nı',
+                                      style: TextStyle(
+                                        color: Color(0xFF60A5FA),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        decoration: TextDecoration.underline,
+                                        decorationColor: Color(0xFF60A5FA),
+                                      ),
+                                    ),
+                                    SizedBox(width: 4),
+                                    Icon(
+                                      Icons.open_in_new_rounded,
+                                      size: 11,
+                                      color: Color(0xFF60A5FA),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            mouseCursor: SystemMouseCursors.click,
-                            recognizer: _termsRecognizer,
                           ),
-                          const TextSpan(
-                            text: '\'nı kabul etmiş olursunuz.',
-                          ),
+                          const Text('kabul etmiş olursunuz.'),
                         ],
                       ),
-                      textAlign: TextAlign.center,
                     ),
                   ),
                 ],
