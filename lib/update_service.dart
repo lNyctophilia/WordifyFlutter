@@ -123,23 +123,53 @@ class UpdateService {
                 ),
               ],
             ),
-            actions: [
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF3A86FF),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: () => clearCacheAndReload(),
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Şimdi Güncelle ve Yenile'),
-              ),
+            actions: const [
+              _UpdateButton(),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _UpdateButton extends StatefulWidget {
+  const _UpdateButton();
+
+  @override
+  State<_UpdateButton> createState() => _UpdateButtonState();
+}
+
+class _UpdateButtonState extends State<_UpdateButton> {
+  bool _isUpdating = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFF3A86FF),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      onPressed: _isUpdating
+          ? null
+          : () {
+              setState(() => _isUpdating = true);
+              UpdateService.clearCacheAndReload();
+            },
+      icon: _isUpdating
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.refresh_rounded),
+      label: Text(_isUpdating ? 'Yenileniyor...' : 'Şimdi Güncelle ve Yenile'),
     );
   }
 }

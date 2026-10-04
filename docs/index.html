@@ -140,23 +140,25 @@
             await reg.unregister();
           }
         }
-        const cookies = document.cookie.split(";");
-        for (let i = 0; i < cookies.length; i++) {
-          const cookie = cookies[i];
-          const eqPos = cookie.indexOf("=");
-          const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-          document.cookie = name.trim() + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
-        }
-        try {
-          localStorage.clear();
-          sessionStorage.clear();
-        } catch (e) {}
       } catch (e) {
         console.error("Cache clear error:", e);
       }
-      window.location.reload(true);
+      
+      const targetUrl = new URL(window.location.href);
+      targetUrl.searchParams.set('t', Date.now().toString());
+      window.location.replace(targetUrl.toString());
     };
   </script>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    (function() {
+      const BUILD_VERSION = '05.10.2026-02.12';
+      const urlParams = new URLSearchParams(window.location.search);
+      const v = urlParams.get('t') || BUILD_VERSION;
+      const script = document.createElement('script');
+      script.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(v);
+      script.async = true;
+      document.body.appendChild(script);
+    })();
+  </script>
 </body>
 </html>

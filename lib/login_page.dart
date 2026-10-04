@@ -14,8 +14,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // TODO: Kullanıcı linki verdiğinde bu URL güncellenecek
-  static const String _termsUrl = 'https://example.com/terms';
+  static const String _termsUrl = 'https://sites.google.com/view/wordifyflutter/';
 
   bool _isLoading = false;
   String? _errorMessage;

@@ -10,7 +10,8 @@ void main() {
 
   final dateStr = '$day.$month.$year';
   final timeStr = '$hour.$minute';
-  final fullVersion = 'Versiyon ($dateStr-$timeStr)';
+  final versionKey = '$dateStr-$timeStr';
+  final fullVersion = 'Versiyon ($versionKey)';
 
   final content = '''class AppConfig {
   static const String version = '1.0.0';
@@ -36,6 +37,26 @@ void main() {
     File('docs/version.json').writeAsStringSync(jsonContent);
   }
 
+  // Web index ve bootstrap dosyalarındaki versiyon damgasını güncelle
+  _updateBuildVersionInFile('web/index.html', versionKey);
+  _updateBuildVersionInFile('web/flutter_bootstrap.js', versionKey);
+  _updateBuildVersionInFile('docs/index.html', versionKey);
+  _updateBuildVersionInFile('docs/flutter_bootstrap.js', versionKey);
+
   // ignore: avoid_print
   print('Versiyon guncellendi: $fullVersion');
+}
+
+void _updateBuildVersionInFile(String path, String newVersion) {
+  final file = File(path);
+  if (!file.existsSync()) return;
+
+  final text = file.readAsStringSync();
+  final updated = text.replaceAll(
+    RegExp(r"const BUILD_VERSION = '.*?';"),
+    "const BUILD_VERSION = '$newVersion';",
+  );
+  if (updated != text) {
+    file.writeAsStringSync(updated);
+  }
 }
