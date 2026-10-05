@@ -37,7 +37,7 @@ _flutter.buildConfig = {"engineRevision":"83675ed27633283e7fc296c8bca22e841224c0
 
 
 try {
-  const BUILD_VERSION = '05.10.2026-05.06';
+  const BUILD_VERSION = '05.10.2026-05.22';
   const urlParams = new URLSearchParams(window.location.search);
   const v = urlParams.get('t') || BUILD_VERSION;
   if (window._flutter && window._flutter.buildConfig && window._flutter.buildConfig.builds) {

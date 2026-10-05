@@ -3,11 +3,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'version.dart';
 import 'update_service.dart';
 import 'utils/pwa_check.dart';
 import 'install_prompt_page.dart';
 import 'login_page.dart';
+import 'settings_page.dart';
 
 import 'auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -111,144 +111,10 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     });
   }
 
-  void _showSettingsDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF131D36),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          title: const Row(
-            children: [
-              Icon(Icons.settings_outlined, color: Color(0xFF3A86FF)),
-              SizedBox(width: 10),
-              Text(
-                'Ayarlar',
-                style: TextStyle(color: Colors.white, fontSize: 18),
-              ),
-            ],
-          ),
-          content: Builder(
-            builder: (context) {
-              final user = AuthService.currentUser;
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (user != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0A1128),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: const Color(0xFF3A86FF),
-                            backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
-                            child: user.photoURL == null
-                                ? Text(
-                                    (user.displayName ?? user.email ?? 'U')[0].toUpperCase(),
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  user.displayName ?? 'Google Kullanıcısı',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  user.email ?? '',
-                                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const Text(
-                    'Uygulama Tercihleri',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.palette_outlined, color: Colors.white70),
-                    title: const Text('Tema', style: TextStyle(color: Colors.white)),
-                    subtitle: const Text('Koyu Tema (Aktif)', style: TextStyle(color: Colors.white38, fontSize: 12)),
-                    onTap: () {},
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.info_outline, color: Colors.white70),
-                    title: const Text('Sürüm Bilgisi', style: TextStyle(color: Colors.white)),
-                    subtitle: Text(
-                      AppConfig.fullVersionString,
-                      style: const TextStyle(color: Color(0xFF3A86FF), fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.sync_rounded, color: Colors.white70),
-                    title: const Text('Güncellemeleri Denetle', style: TextStyle(color: Colors.white)),
-                    subtitle: const Text('Sunucudaki en son sürümü kontrol eder', style: TextStyle(color: Colors.white38, fontSize: 12)),
-                    onTap: () {
-                      Navigator.pop(dialogContext);
-                      UpdateService.checkForUpdates(context, showNoUpdateMessage: true);
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.cleaning_services_rounded, color: Colors.orangeAccent),
-                    title: const Text('Çerezleri ve Önbelleği Temizle', style: TextStyle(color: Colors.white)),
-                    subtitle: const Text('Eski verileri sıfırlar ve sayfayı yeniler', style: TextStyle(color: Colors.white38, fontSize: 12)),
-                    onTap: () {
-                      Navigator.pop(dialogContext);
-                      UpdateService.clearCacheAndReload();
-                    },
-                  ),
-                  if (user != null) ...[
-                    const Divider(color: Colors.white10, height: 16),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-                      title: const Text('Çıkış Yap', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
-                      subtitle: const Text('Hesabınızdan güvenle çıkış yapın', style: TextStyle(color: Colors.white38, fontSize: 12)),
-                      onTap: () async {
-                        Navigator.pop(dialogContext);
-                        await AuthService.signOut();
-                      },
-                    ),
-                  ],
-                ],
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Kapat', style: TextStyle(color: Color(0xFF3A86FF))),
-            ),
-          ],
-        );
-      },
+  void _openSettings(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsPage()),
     );
   }
 
@@ -285,7 +151,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
             child: IconButton(
               icon: const Icon(Icons.settings_outlined, color: Color(0xFF6E8FB0), size: 26),
               tooltip: 'Ayarlar',
-              onPressed: () => _showSettingsDialog(context),
+              onPressed: () => _openSettings(context),
             ),
           ),
         ],
