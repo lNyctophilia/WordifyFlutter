@@ -214,44 +214,6 @@ class SettingsPage extends StatelessWidget {
                     UpdateService.clearCacheAndReload();
                   },
                 ),
-                _buildSettingsCard(
-                  icon: Icons.info_outline_rounded,
-                  iconColor: const Color(0xFF137FEC),
-                  title: 'Sürüm Bilgisi',
-                  subtitle: AppConfig.fullVersionString,
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF137FEC).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFF137FEC).withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      AppConfig.version,
-                      style: const TextStyle(
-                        color: Color(0xFF3A86FF),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                _buildSectionHeader('Görünüm'),
-                _buildSettingsCard(
-                  icon: Icons.palette_outlined,
-                  iconColor: const Color(0xFF00C9A7),
-                  title: 'Tema',
-                  subtitle: 'Koyu Tema (Aktif)',
-                  trailing: const Text(
-                    'Koyu',
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
                 if (user != null) ...[
                   _buildSectionHeader('Oturum'),
                   _buildSettingsCard(
@@ -266,6 +228,86 @@ class SettingsPage extends StatelessWidget {
                     },
                   ),
                 ],
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF131D36),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.07),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF3A86FF).withValues(alpha: 0.2),
+                              blurRadius: 16,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            'assets/icon.png',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Wordify',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        AppConfig.fullVersionString,
+                        style: const TextStyle(
+                          color: Color(0xFF6E8FB0),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Divider(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        height: 1,
+                        indent: 40,
+                        endIndent: 40,
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Geliştirici: lNyctophilia',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        '© 2026 Tüm Hakları Saklıdır',
+                        style: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),

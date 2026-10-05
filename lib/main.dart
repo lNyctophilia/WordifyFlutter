@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'update_service.dart';
@@ -11,9 +12,19 @@ import 'settings_page.dart';
 
 import 'auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'utils/app_toast.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Color(0xFF0D1622),
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Color(0xFF0D1622),
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -38,6 +49,28 @@ class WordifyApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
         scaffoldBackgroundColor: const Color(0xFF0D1622),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF0D1622),
+          surfaceTintColor: Colors.transparent,
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Color(0xFF0D1622),
+            statusBarIconBrightness: Brightness.light,
+            statusBarBrightness: Brightness.dark,
+          ),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF131D36),
+          elevation: 6,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(
+              color: Color(0xFF0C1322),
+              width: 1.2,
+            ),
+          ),
+          insetPadding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        ),
         useMaterial3: true,
       ),
       home: const WordifyRootRouter(),
@@ -123,7 +156,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D1622),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color(0xFF0D1622),
         elevation: 0,
         titleSpacing: 20,
         title: const Row(
@@ -238,12 +271,11 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                             ),
                             tooltip: 'Bilgi',
                             onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('$_currentDay. gün içeriği'),
-                                  duration: const Duration(seconds: 2),
-                                  backgroundColor: const Color(0xFF1E293B),
-                                ),
+                              AppToast.show(
+                                context,
+                                message: '$_currentDay. gün içeriği',
+                                backgroundColor: const Color(0xFF1E293B),
+                                icon: Icons.info_outline,
                               );
                             },
                           ),
@@ -256,12 +288,11 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                 // "Başla" Button
                 ElevatedButton(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('$_currentDay. güne başlandı!'),
-                        duration: const Duration(seconds: 2),
-                        backgroundColor: const Color(0xFF137FEC),
-                      ),
+                    AppToast.show(
+                      context,
+                      message: '$_currentDay. güne başlandı!',
+                      backgroundColor: const Color(0xFF137FEC),
+                      icon: Icons.play_arrow_rounded,
                     );
                   },
                   style: ElevatedButton.styleFrom(

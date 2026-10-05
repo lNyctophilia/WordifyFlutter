@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'version.dart';
+import 'utils/app_toast.dart';
 
 @JS('clearCacheAndReload')
 external void _jsClearCacheAndReload();
@@ -45,11 +46,11 @@ class UpdateService {
             _showUpdateDialog(context, remoteVersion);
           }
         } else if (showNoUpdateMessage && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Uygulama zaten en güncel sürümde.'),
-              backgroundColor: Color(0xFF137FEC),
-            ),
+          AppToast.show(
+            context,
+            message: 'Uygulama zaten en güncel sürümde.',
+            backgroundColor: const Color(0xFF137FEC),
+            icon: Icons.check_circle_outline,
           );
         }
       }
