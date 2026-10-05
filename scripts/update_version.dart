@@ -1,6 +1,15 @@
+import 'dart:convert';
 import 'dart:io';
 
-void main() {
+void main(List<String> args) {
+  if (args.contains('--post-build')) {
+    _handlePostBuild();
+    return;
+  }
+  _handlePreBuild();
+}
+
+void _handlePreBuild() {
   final now = DateTime.now();
   final day = now.day.toString().padLeft(2, '0');
   final month = now.month.toString().padLeft(2, '0');
@@ -33,19 +42,42 @@ void main() {
 ''';
 
   File('web/version.json').writeAsStringSync(jsonContent);
-  if (Directory('docs').existsSync()) {
-    File('docs/version.json').writeAsStringSync(jsonContent);
-  }
 
   // Web index ve bootstrap dosyalarındaki versiyon damgasını güncelle
   _updateBuildVersionInFile('web/index.html', versionKey);
   _updateBuildVersionInFile('web/flutter_bootstrap.js', versionKey);
-  _updateBuildVersionInFile('docs/index.html', versionKey);
-  _updateBuildVersionInFile('docs/flutter_bootstrap.js', versionKey);
-  _updateFontManifest('docs/assets/FontManifest.json', versionKey);
 
   // ignore: avoid_print
-  print('Versiyon guncellendi: $fullVersion');
+  print('Pre-build versiyon guncellendi: $fullVersion');
+}
+
+void _handlePostBuild() {
+  final versionFile = File('web/version.json');
+  if (!versionFile.existsSync()) {
+    // ignore: avoid_print
+    print('HATA: web/version.json bulunamadi!');
+    return;
+  }
+
+  final data = jsonDecode(versionFile.readAsStringSync()) as Map<String, dynamic>;
+  final dateStr = data['buildDate'] as String;
+  final timeStr = data['buildTime'] as String;
+  final versionKey = '$dateStr-$timeStr';
+  final fullVersion = data['fullVersion'] as String;
+
+  if (Directory('docs').existsSync()) {
+    File('docs/version.json').writeAsStringSync(versionFile.readAsStringSync());
+    _updateBuildVersionInFile('docs/index.html', versionKey);
+    _updateBuildVersionInFile('docs/flutter_bootstrap.js', versionKey);
+    _updateFontManifest('docs/assets/FontManifest.json', versionKey);
+  }
+
+  if (Directory('build/web').existsSync()) {
+    _updateFontManifest('build/web/assets/FontManifest.json', versionKey);
+  }
+
+  // ignore: avoid_print
+  print('Post-build tamamlandi (Versiyon korundu: $fullVersion)');
 }
 
 void _updateBuildVersionInFile(String path, String newVersion) {

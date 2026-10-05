@@ -31,7 +31,7 @@ if exist docs rmdir /s /q docs
 mkdir docs
 xcopy build\web\* docs\ /s /e /q
 type nul > docs\.nojekyll
-call dart run scripts\update_version.dart
+call dart run scripts\update_version.dart --post-build
 echo Kopyalama tamamlandi!
 echo.
 

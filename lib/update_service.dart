@@ -123,8 +123,15 @@ class UpdateService {
                 ),
               ],
             ),
-            actions: const [
-              _UpdateButton(),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text(
+                  'Daha Sonra',
+                  style: TextStyle(color: Colors.white60),
+                ),
+              ),
+              const _UpdateButton(),
             ],
           ),
         );
