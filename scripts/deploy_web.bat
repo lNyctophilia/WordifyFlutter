@@ -48,5 +48,4 @@ echo   WEB DEPLOY TAMAMLANDI!
 echo   Site: https://lnyctophilia.github.io/WordifyFlutter/
 echo ===================================
 echo.
-pause
 
