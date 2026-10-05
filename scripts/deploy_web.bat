@@ -16,7 +16,7 @@ if errorlevel 1 (
 
 REM 1. Flutter Web Build
 echo [1/3] Flutter Web build aliniyor...
-call flutter build web --release --base-href "/WordifyFlutter/"
+call flutter build web --release --no-tree-shake-icons --base-href "/WordifyFlutter/"
 if errorlevel 1 (
     echo HATA: Flutter web build basarisiz!
     pause
@@ -31,6 +31,7 @@ if exist docs rmdir /s /q docs
 mkdir docs
 xcopy build\web\* docs\ /s /e /q
 type nul > docs\.nojekyll
+call dart run scripts\update_version.dart
 echo Kopyalama tamamlandi!
 echo.
 

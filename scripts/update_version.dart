@@ -42,6 +42,7 @@ void main() {
   _updateBuildVersionInFile('web/flutter_bootstrap.js', versionKey);
   _updateBuildVersionInFile('docs/index.html', versionKey);
   _updateBuildVersionInFile('docs/flutter_bootstrap.js', versionKey);
+  _updateFontManifest('docs/assets/FontManifest.json', versionKey);
 
   // ignore: avoid_print
   print('Versiyon guncellendi: $fullVersion');
@@ -55,6 +56,20 @@ void _updateBuildVersionInFile(String path, String newVersion) {
   final updated = text.replaceAll(
     RegExp(r"const BUILD_VERSION = '.*?';"),
     "const BUILD_VERSION = '$newVersion';",
+  );
+  if (updated != text) {
+    file.writeAsStringSync(updated);
+  }
+}
+
+void _updateFontManifest(String path, String versionKey) {
+  final file = File(path);
+  if (!file.existsSync()) return;
+
+  final text = file.readAsStringSync();
+  final updated = text.replaceAllMapped(
+    RegExp(r'"asset":\s*"([^"]+?\.(?:otf|ttf))(?:\?v=[^"]*)?"'),
+    (match) => '"asset":"${match.group(1)}?v=$versionKey"',
   );
   if (updated != text) {
     file.writeAsStringSync(updated);

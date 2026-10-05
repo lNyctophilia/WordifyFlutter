@@ -262,7 +262,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
         title: const Row(
           children: [
             Icon(
-              Icons.translate_rounded,
+              Icons.translate,
               color: Color(0xFF3A86FF),
               size: 26,
             ),
@@ -282,7 +282,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
           Padding(
             padding: const EdgeInsets.only(right: 12.0),
             child: IconButton(
-              icon: const Icon(Icons.settings, color: Color(0xFF6B7A99), size: 26),
+              icon: const Icon(Icons.settings_outlined, color: Color(0xFF8E9EB6), size: 26),
               tooltip: 'Ayarlar',
               onPressed: () => _showSettingsDialog(context),
             ),
@@ -333,16 +333,17 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                         top: 10,
                         right: 20,
                         child: Container(
-                          width: 36,
-                          height: 36,
+                          width: 38,
+                          height: 38,
                           decoration: const BoxDecoration(
                             color: Color(0xFF1E2E4E),
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
                             padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
                             icon: const Icon(
-                              Icons.info_outline_rounded,
+                              Icons.info_outline,
                               color: Colors.white70,
                               size: 20,
                             ),
@@ -398,17 +399,17 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Previous Day Button
-                    Material(
-                      color: const Color(0xFF1C2C48),
-                      shape: const CircleBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: IconButton(
-                        icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
-                        iconSize: 26,
-                        onPressed: _currentDay > 1
-                            ? () => setState(() => _currentDay--)
-                            : null,
+                    IconButton(
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(0xFF1C2C48),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.all(12),
+                        shape: const CircleBorder(),
                       ),
+                      icon: const Icon(Icons.chevron_left, color: Colors.white, size: 24),
+                      onPressed: _currentDay > 1
+                          ? () => setState(() => _currentDay--)
+                          : null,
                     ),
                     const SizedBox(width: 16),
                     // Current / Total Container
@@ -430,17 +431,17 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                     ),
                     const SizedBox(width: 16),
                     // Next Day Button
-                    Material(
-                      color: const Color(0xFF1C2C48),
-                      shape: const CircleBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: IconButton(
-                        icon: const Icon(Icons.chevron_right_rounded, color: Colors.white),
-                        iconSize: 26,
-                        onPressed: _currentDay < _totalDays
-                            ? () => setState(() => _currentDay++)
-                            : null,
+                    IconButton(
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(0xFF1C2C48),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.all(12),
+                        shape: const CircleBorder(),
                       ),
+                      icon: const Icon(Icons.chevron_right, color: Colors.white, size: 24),
+                      onPressed: _currentDay < _totalDays
+                          ? () => setState(() => _currentDay++)
+                          : null,
                     ),
                   ],
                 ),
