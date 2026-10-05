@@ -99,6 +99,9 @@ class WordifyHomePage extends StatefulWidget {
 }
 
 class _WordifyHomePageState extends State<WordifyHomePage> {
+  int _currentDay = 77;
+  final int _totalDays = 611;
+
   @override
   void initState() {
     super.initState();
@@ -250,116 +253,201 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
+      backgroundColor: const Color(0xFF0A1128),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        titleSpacing: 20,
+        title: const Row(
+          children: [
+            Icon(
+              Icons.translate_rounded,
+              color: Color(0xFF3A86FF),
+              size: 26,
+            ),
+            SizedBox(width: 10),
+            Text(
+              'Wordify',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12.0),
             child: IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Colors.white70),
+              icon: const Icon(Icons.settings, color: Color(0xFF6B7A99), size: 26),
               tooltip: 'Ayarlar',
               onPressed: () => _showSettingsDialog(context),
             ),
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(
+            color: const Color(0xFF16233B),
+            height: 1.0,
+          ),
+        ),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 500),
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 450),
+            child: Column(
+              children: [
+                const Spacer(flex: 2),
+                // Center Circle with Info Badge
+                SizedBox(
+                  width: 280,
+                  height: 250,
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
                       Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3A86FF).withValues(alpha: 0.15),
+                        width: 220,
+                        height: 220,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF131F37),
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFF3A86FF),
-                            width: 2,
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Gün $_currentDay',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
-                        child: const Icon(
-                          Icons.text_fields_rounded,
-                          size: 40,
-                          color: Color(0xFF3A86FF),
-                        ),
                       ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Wordify',
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Proje geliştirilmeye hazır.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.green.withValues(alpha: 0.5),
+                      Positioned(
+                        top: 10,
+                        right: 20,
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF1E2E4E),
+                            shape: BoxShape.circle,
                           ),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.check_circle_outline_rounded,
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(
+                              Icons.info_outline_rounded,
+                              color: Colors.white70,
                               size: 20,
-                              color: Colors.green,
                             ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Firebase Bağlandı',
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                            tooltip: 'Bilgi',
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('$_currentDay. gün içeriği'),
+                                  duration: const Duration(seconds: 2),
+                                  backgroundColor: const Color(0xFF131D36),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Text(
-                AppConfig.fullVersionString,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.35),
-                  fontSize: 12,
-                  letterSpacing: 0.5,
-                  fontFamily: 'monospace',
+                const SizedBox(height: 36),
+                // "Başla" Button
+                ElevatedButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('$_currentDay. güne başlandı!'),
+                        duration: const Duration(seconds: 2),
+                        backgroundColor: const Color(0xFF3A86FF),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0084FF),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                  child: const Text(
+                    'Başla',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 48),
+                // Pagination Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Previous Day Button
+                    Material(
+                      color: const Color(0xFF1C2C48),
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: IconButton(
+                        icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
+                        iconSize: 26,
+                        onPressed: _currentDay > 1
+                            ? () => setState(() => _currentDay--)
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Current / Total Container
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1C2C48),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        '$_currentDay / $_totalDays',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Next Day Button
+                    Material(
+                      color: const Color(0xFF1C2C48),
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: IconButton(
+                        icon: const Icon(Icons.chevron_right_rounded, color: Colors.white),
+                        iconSize: 26,
+                        onPressed: _currentDay < _totalDays
+                            ? () => setState(() => _currentDay++)
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(flex: 3),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
