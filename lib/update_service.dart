@@ -49,7 +49,7 @@ class UpdateService {
           AppToast.show(
             context,
             message: 'Uygulama zaten en güncel sürümde.',
-            backgroundColor: const Color(0xFF137FEC),
+            backgroundColor: const Color(0xFF3A86FF),
             icon: Icons.check_circle_outline,
           );
         }

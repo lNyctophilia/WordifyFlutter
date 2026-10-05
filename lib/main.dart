@@ -10,7 +10,9 @@ import 'install_prompt_page.dart';
 import 'login_page.dart';
 import 'settings_page.dart';
 
+import 'dart:async';
 import 'auth_service.dart';
+import 'progress_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'utils/app_toast.dart';
 
@@ -18,10 +20,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
-      statusBarColor: Color(0xFF0D1622),
+      statusBarColor: Color(0xFF0A1128),
       statusBarIconBrightness: Brightness.light,
       statusBarBrightness: Brightness.dark,
-      systemNavigationBarColor: Color(0xFF0D1622),
+      systemNavigationBarColor: Color(0xFF0A1128),
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
@@ -45,15 +47,15 @@ class WordifyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF137FEC),
+          seedColor: const Color(0xFF3A86FF),
           brightness: Brightness.dark,
         ),
-        scaffoldBackgroundColor: const Color(0xFF0D1622),
+        scaffoldBackgroundColor: const Color(0xFF0A1128),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0D1622),
+          backgroundColor: Color(0xFF0A1128),
           surfaceTintColor: Colors.transparent,
           systemOverlayStyle: SystemUiOverlayStyle(
-            statusBarColor: Color(0xFF0D1622),
+            statusBarColor: Color(0xFF0A1128),
             statusBarIconBrightness: Brightness.light,
             statusBarBrightness: Brightness.dark,
           ),
@@ -133,8 +135,9 @@ class WordifyHomePage extends StatefulWidget {
 }
 
 class _WordifyHomePageState extends State<WordifyHomePage> {
-  int _currentDay = 77;
+  int _currentDay = 1;
   final int _totalDays = 611;
+  StreamSubscription<int>? _progressSubscription;
 
   @override
   void initState() {
@@ -142,6 +145,25 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateService.checkForUpdates(context);
     });
+    _progressSubscription = ProgressService.currentDayStream.listen((day) {
+      if (mounted && _currentDay != day) {
+        setState(() {
+          _currentDay = day;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _progressSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _changeDay(int newDay) {
+    if (newDay < 1 || newDay > _totalDays || newDay == _currentDay) return;
+    setState(() => _currentDay = newDay);
+    ProgressService.updateCurrentDay(newDay);
   }
 
   void _openSettings(BuildContext context) {
@@ -154,16 +176,16 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1622),
+      backgroundColor: const Color(0xFF0A1128),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0D1622),
+        backgroundColor: const Color(0xFF0A1128),
         elevation: 0,
         titleSpacing: 20,
         title: const Row(
           children: [
             Icon(
               Icons.translate,
-              color: Color(0xFF137FEC),
+              color: Color(0xFF3A86FF),
               size: 26,
             ),
             SizedBox(width: 10),
@@ -182,7 +204,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
           Padding(
             padding: const EdgeInsets.only(right: 12.0),
             child: IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Color(0xFF6E8FB0), size: 26),
+              icon: const Icon(Icons.settings_outlined, color: Color(0xFF7A9BB8), size: 26),
               tooltip: 'Ayarlar',
               onPressed: () => _openSettings(context),
             ),
@@ -191,7 +213,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFF192540),
             height: 1.0,
           ),
         ),
@@ -218,34 +240,41 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                         ),
                         duration: const Duration(milliseconds: 400),
                         curve: Curves.easeOutCubic,
-                        builder: (context, animatedProgress, child) {
-                          return CustomPaint(
-                            size: const Size(236, 236),
-                            painter: _ProgressRingPainter(
-                              progress: animatedProgress,
-                              trackColor: const Color(0xFF334155),
-                              progressColor: const Color(0xFF137FEC),
-                              strokeWidth: 6.0,
+                        builder: (context, animatedProgress, _) {
+                          return SizedBox(
+                            width: 236,
+                            height: 236,
+                            child: CustomPaint(
+                              painter: _ProgressRingPainter(
+                                progress: animatedProgress,
+                                trackColor: const Color(0xFF1E2D4A),
+                                progressColor: const Color(0xFF3A86FF),
+                                strokeWidth: 7.0,
+                              ),
                             ),
-                            child: child,
                           );
                         },
-                        child: Container(
-                          width: 220,
-                          height: 220,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF1E293B),
-                            shape: BoxShape.circle,
+                      ),
+                      // Inner Center Circle
+                      Container(
+                        width: 210,
+                        height: 210,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF131D36),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFF1E2D4A),
+                            width: 1.5,
                           ),
-                          child: Center(
-                            child: Text(
-                              'Gün $_currentDay',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            'Gün $_currentDay',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
                             ),
                           ),
                         ),
@@ -257,16 +286,20 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                         child: Container(
                           width: 36,
                           height: 36,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF324154),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1B2947),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF1E2D4A),
+                              width: 1,
+                            ),
                           ),
                           child: IconButton(
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                             icon: const Icon(
                               Icons.info_outline,
-                              color: Color(0xFF6E8FB0),
+                              color: Color(0xFF7A9BB8),
                               size: 19,
                             ),
                             tooltip: 'Bilgi',
@@ -274,7 +307,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                               AppToast.show(
                                 context,
                                 message: '$_currentDay. gün içeriği',
-                                backgroundColor: const Color(0xFF1E293B),
+                                backgroundColor: const Color(0xFF131D36),
                                 icon: Icons.info_outline,
                               );
                             },
@@ -291,12 +324,12 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                     AppToast.show(
                       context,
                       message: '$_currentDay. güne başlandı!',
-                      backgroundColor: const Color(0xFF137FEC),
+                      backgroundColor: const Color(0xFF3A86FF),
                       icon: Icons.play_arrow_rounded,
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF137FEC),
+                    backgroundColor: const Color(0xFF3A86FF),
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 52, vertical: 14),
@@ -321,23 +354,34 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                     // Previous Day Button
                     IconButton(
                       style: IconButton.styleFrom(
-                        backgroundColor: const Color(0xFF324154),
+                        backgroundColor: const Color(0xFF131D36),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.all(12),
-                        shape: const CircleBorder(),
+                        shape: const CircleBorder(
+                          side: BorderSide(
+                            color: Color(0xFF1E2D4A),
+                            width: 1,
+                          ),
+                        ),
                       ),
                       icon: const Icon(Icons.chevron_left, color: Colors.white, size: 24),
-                      onPressed: _currentDay > 1
-                          ? () => setState(() => _currentDay--)
-                          : null,
+                      onPressed: () {
+                        if (_currentDay > 1) {
+                          _changeDay(_currentDay - 1);
+                        }
+                      },
                     ),
                     const SizedBox(width: 16),
                     // Current / Total Container
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF324154),
+                        color: const Color(0xFF131D36),
                         borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF1E2D4A),
+                          width: 1,
+                        ),
                       ),
                       child: Text(
                         '$_currentDay / $_totalDays',
@@ -353,15 +397,22 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                     // Next Day Button
                     IconButton(
                       style: IconButton.styleFrom(
-                        backgroundColor: const Color(0xFF324154),
+                        backgroundColor: const Color(0xFF131D36),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.all(12),
-                        shape: const CircleBorder(),
+                        shape: const CircleBorder(
+                          side: BorderSide(
+                            color: Color(0xFF1E2D4A),
+                            width: 1,
+                          ),
+                        ),
                       ),
                       icon: const Icon(Icons.chevron_right, color: Colors.white, size: 24),
-                      onPressed: _currentDay < _totalDays
-                          ? () => setState(() => _currentDay++)
-                          : null,
+                      onPressed: () {
+                        if (_currentDay < _totalDays) {
+                          _changeDay(_currentDay + 1);
+                        }
+                      },
                     ),
                   ],
                 ),
@@ -385,7 +436,7 @@ class _ProgressRingPainter extends CustomPainter {
     required this.progress,
     required this.trackColor,
     required this.progressColor,
-    this.strokeWidth = 6.0,
+    this.strokeWidth = 7.0,
   });
 
   @override
@@ -410,10 +461,15 @@ class _ProgressRingPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeWidth = strokeWidth;
 
+    final sweepAngle = math.max(
+      math.pi * 2 * progress.clamp(0.0, 1.0),
+      progress > 0 ? 0.04 : 0.0,
+    );
+
     canvas.drawArc(
       rect,
       -math.pi / 2,
-      math.pi * 2 * progress.clamp(0.0, 1.0),
+      sweepAngle,
       false,
       progressPaint,
     );

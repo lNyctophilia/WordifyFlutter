@@ -7,7 +7,7 @@ class AppToast {
 
   static SnackBar createSnackBar({
     required Widget content,
-    Color backgroundColor = const Color(0xFF137FEC),
+    Color backgroundColor = const Color(0xFF3A86FF),
     Duration duration = const Duration(seconds: 2),
     SnackBarAction? action,
   }) {
@@ -32,7 +32,7 @@ class AppToast {
   static void show(
     BuildContext context, {
     required String message,
-    Color backgroundColor = const Color(0xFF137FEC),
+    Color backgroundColor = const Color(0xFF3A86FF),
     Duration duration = const Duration(seconds: 2),
     IconData? icon,
     SnackBarAction? action,

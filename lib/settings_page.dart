@@ -104,9 +104,9 @@ class SettingsPage extends StatelessWidget {
     final user = AuthService.currentUser;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1622),
+      backgroundColor: const Color(0xFF0A1128),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0D1622),
+        backgroundColor: const Color(0xFF0A1128),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24),
@@ -124,7 +124,7 @@ class SettingsPage extends StatelessWidget {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFF192540),
             height: 1.0,
           ),
         ),

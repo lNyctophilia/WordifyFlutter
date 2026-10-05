@@ -2,4 +2,8 @@
 
 \*\*
 
+uygulamanın normal halindeki ss'leri al her durumdan, bu durumları fotoğraflarla ilişkilendirerek uygulamayı claude'a implementation plan oluşturt
+
+WP-Sayim uygulamasından renk paletini al, wordify için kullan
+
 \*\*

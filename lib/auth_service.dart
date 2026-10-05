@@ -78,6 +78,7 @@ class AuthService {
           'photoURL': user.photoURL ?? '',
           'roles': ['staff'],
           'isApproved': false,
+          'currentDay': 1,
           'createdAt': FieldValue.serverTimestamp(),
           'lastLoginAt': FieldValue.serverTimestamp(),
         });
