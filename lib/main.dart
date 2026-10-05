@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -303,41 +304,128 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
             child: Column(
               children: [
                 const Spacer(flex: 2),
-                // Center Circle with Info Badge
+                // Center Circle with Animated Progress Ring and Info Badge
                 SizedBox(
-                  width: 280,
-                  height: 250,
+                  width: 290,
+                  height: 270,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
+                      // Ambient Glow behind the ring
                       Container(
-                        width: 220,
-                        height: 220,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF131F37),
+                        width: 200,
+                        height: 200,
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Gün $_currentDay',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF3A86FF).withValues(alpha: 0.18),
+                              blurRadius: 60,
+                              spreadRadius: 10,
                             ),
+                          ],
+                        ),
+                      ),
+                      // Animated Circular Progress Ring
+                      TweenAnimationBuilder<double>(
+                        tween: Tween<double>(
+                          begin: 0.0,
+                          end: (_currentDay / _totalDays).clamp(0.0, 1.0),
+                        ),
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, animatedProgress, child) {
+                          return CustomPaint(
+                            size: const Size(244, 244),
+                            painter: _ProgressRingPainter(
+                              progress: animatedProgress,
+                              trackColor: const Color(0xFF142036),
+                              gradientColors: const [
+                                Color(0xFF0072FF),
+                                Color(0xFF00C6FF),
+                                Color(0xFF3A86FF),
+                              ],
+                              strokeWidth: 8.0,
+                            ),
+                            child: child,
+                          );
+                        },
+                        child: Container(
+                          width: 218,
+                          height: 218,
+                          margin: const EdgeInsets.all(13),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const RadialGradient(
+                              colors: [
+                                Color(0xFF162544),
+                                Color(0xFF0F182C),
+                              ],
+                              stops: [0.3, 1.0],
+                            ),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.06),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Gün $_currentDay',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF3A86FF).withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFF3A86FF).withValues(alpha: 0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  '%${((_currentDay / _totalDays) * 100).toStringAsFixed(1)} Tamamlandı',
+                                  style: const TextStyle(
+                                    color: Color(0xFF60A5FA),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
+                      // Floating Info Badge
                       Positioned(
-                        top: 10,
-                        right: 20,
+                        top: 6,
+                        right: 14,
                         child: Container(
                           width: 38,
                           height: 38,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF1E2E4E),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF16243E),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.12),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
                           child: IconButton(
                             padding: EdgeInsets.zero,
@@ -363,61 +451,106 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 36),
-                // "Başla" Button
-                ElevatedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('$_currentDay. güne başlandı!'),
-                        duration: const Duration(seconds: 2),
-                        backgroundColor: const Color(0xFF3A86FF),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0084FF),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                const SizedBox(height: 38),
+                // Glowing "Başla" Button
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF0084FF),
+                        Color(0xFF005FD6),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0084FF).withValues(alpha: 0.38),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  child: const Text(
-                    'Başla',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('$_currentDay. güne başlandı!'),
+                          duration: const Duration(seconds: 2),
+                          backgroundColor: const Color(0xFF3A86FF),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 46, vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Başla',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 44),
                 // Pagination Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // Previous Day Button
-                    IconButton(
-                      style: IconButton.styleFrom(
-                        backgroundColor: const Color(0xFF1C2C48),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.all(12),
-                        shape: const CircleBorder(),
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          width: 1,
+                        ),
                       ),
-                      icon: const Icon(Icons.chevron_left, color: Colors.white, size: 24),
-                      onPressed: _currentDay > 1
-                          ? () => setState(() => _currentDay--)
-                          : null,
+                      child: IconButton(
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFF142036),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                          shape: const CircleBorder(),
+                        ),
+                        icon: const Icon(Icons.chevron_left, color: Colors.white, size: 24),
+                        onPressed: _currentDay > 1
+                            ? () => setState(() => _currentDay--)
+                            : null,
+                      ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     // Current / Total Container
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1C2C48),
-                        borderRadius: BorderRadius.circular(16),
+                        color: const Color(0xFF142036),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          width: 1,
+                        ),
                       ),
                       child: Text(
                         '$_currentDay / $_totalDays',
@@ -429,19 +562,28 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     // Next Day Button
-                    IconButton(
-                      style: IconButton.styleFrom(
-                        backgroundColor: const Color(0xFF1C2C48),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.all(12),
-                        shape: const CircleBorder(),
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          width: 1,
+                        ),
                       ),
-                      icon: const Icon(Icons.chevron_right, color: Colors.white, size: 24),
-                      onPressed: _currentDay < _totalDays
-                          ? () => setState(() => _currentDay++)
-                          : null,
+                      child: IconButton(
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFF142036),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                          shape: const CircleBorder(),
+                        ),
+                        icon: const Icon(Icons.chevron_right, color: Colors.white, size: 24),
+                        onPressed: _currentDay < _totalDays
+                            ? () => setState(() => _currentDay++)
+                            : null,
+                      ),
                     ),
                   ],
                 ),
@@ -452,5 +594,62 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
         ),
       ),
     );
+  }
+}
+
+class _ProgressRingPainter extends CustomPainter {
+  final double progress;
+  final Color trackColor;
+  final List<Color> gradientColors;
+  final double strokeWidth;
+
+  const _ProgressRingPainter({
+    required this.progress,
+    required this.trackColor,
+    required this.gradientColors,
+    this.strokeWidth = 8.0,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+
+    // Background track ring
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, trackPaint);
+
+    if (progress <= 0) return;
+
+    // Active progress arc with smooth gradient
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final progressPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = strokeWidth
+      ..shader = SweepGradient(
+        startAngle: 0.0,
+        endAngle: math.pi * 2,
+        colors: gradientColors,
+        transform: const GradientRotation(-math.pi / 2),
+      ).createShader(rect);
+
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      math.pi * 2 * progress.clamp(0.0, 1.0),
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ProgressRingPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.trackColor != trackColor ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }
