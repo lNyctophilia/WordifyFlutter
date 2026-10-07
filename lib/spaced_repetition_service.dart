@@ -164,6 +164,7 @@ class SpacedRepetitionService {
       int newWords = 0;
       int reviewWords = 0;
       int totalLearned = 0;
+      int totalWords = snapshot.docs.length;
       
       for (var doc in snapshot.docs) {
         final data = doc.data();
@@ -186,6 +187,7 @@ class SpacedRepetitionService {
         'new': newWords,
         'review': reviewWords,
         'total_learned': totalLearned,
+        'total_words': totalWords,
       };
     });
   }

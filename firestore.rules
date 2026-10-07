@@ -34,14 +34,19 @@ service cloud.firestore {
         isAdmin() || 
         (
           request.auth.uid == userId && 
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'lastLoginAt', 'displayName', 'photoURL', 'fcmToken', 'sessionId'
+          request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'lastLoginAt', 'displayName', 'photoURL', 'fcmToken', 'sessionId', 'last_word_index'
           ])
         )
       );
 
       // Sadece admin silebilir
       allow delete: if request.auth != null && isAdmin();
+      
+      // Kullanıcının kelime koleksiyonu
+      match /words/{wordId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Wordify genel sistem ayarları

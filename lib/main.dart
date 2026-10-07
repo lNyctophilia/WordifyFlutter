@@ -176,9 +176,12 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
         final int newDue = stats['new'] ?? 0;
         final int reviewDue = stats['review'] ?? 0;
         final int totalLearned = stats['total_learned'] ?? 0;
+        final int totalWords = stats['total_words'] ?? 0;
 
-        final int newDone = (_newWordsGoal - newDue).clamp(0, _newWordsGoal);
-        final int reviewDone = (_reviewGoal - reviewDue).clamp(0, _reviewGoal);
+        final bool hasStarted = totalWords > 0;
+
+        final int newDone = hasStarted ? (_newWordsGoal - newDue).clamp(0, _newWordsGoal) : 0;
+        final int reviewDone = hasStarted ? (_reviewGoal - reviewDue).clamp(0, _reviewGoal) : 0;
         final int currentNewGoal = (newDone + newDue).clamp(_newWordsGoal, 999);
         final int currentReviewGoal = (reviewDone + reviewDue).clamp(_reviewGoal, 999);
         
@@ -484,7 +487,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
 
   Widget _buildWeeklyActivityGraph() {
     final days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-    final activity = [0.4, 0.7, 0.5, 0.9, 0.2, 0.0, 0.0];
+    final activity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
     
     return Container(
       padding: const EdgeInsets.all(24),
