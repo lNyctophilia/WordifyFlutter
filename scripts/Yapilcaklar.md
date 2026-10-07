@@ -6,4 +6,6 @@ uygulamanın normal halindeki ss'leri al her durumdan, bu durumları fotoğrafla
 
 WP-Sayim uygulamasından renk paletini al, wordify için kullan
 
+"en_tr_word_list.txt" dosyasında ingilizce kelimeler ve türkçe karşılıkları , ingilizce ve türkçe örnek cümleleri var. Biz bu kelimeleri bu uygulamada şu yöntemle öğretmeye çalışıcaz : bi kutucuk içerisinde bu
+
 \*\*
