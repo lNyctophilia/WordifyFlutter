@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'spaced_repetition_service.dart';
 
 enum QuestionType { recognition, partial, mastery }
 
@@ -31,7 +32,8 @@ class SessionPage extends StatefulWidget {
 }
 
 class _SessionPageState extends State<SessionPage> with SingleTickerProviderStateMixin {
-  late List<SessionQuestion> _questions;
+  List<SpacedWord> _words = [];
+  bool _isLoading = true;
   int _currentIndex = 0;
 
   bool _showFeedback = false;
@@ -46,33 +48,21 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _questions = [
-      SessionQuestion(
-        type: QuestionType.recognition,
-        targetWord: 'developer',
-        sentence: 'The _______ fixed the bug.',
-        options: ['designer', 'developer', 'manager', 'tester'],
-        falseFriends: {'designer': 'Tasarımcı'},
-      ),
-      SessionQuestion(
-        type: QuestionType.partial,
-        targetWord: 'accept',
-        sentence: 'She decided to _______ the job offer.',
-        hint: 'a _ _ _ _ _',
-        falseFriends: {'except': 'Hariç'},
-      ),
-      SessionQuestion(
-        type: QuestionType.mastery,
-        targetWord: 'improve',
-        translation: 'Geliştirmek, iyileştirmek',
-        falseFriends: {'prove': 'Kanıtlamak'},
-      ),
-    ];
-
     _shakeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
+    _loadSession();
+  }
+
+  Future<void> _loadSession() async {
+    final words = await SpacedRepetitionService.getTodaySession();
+    if (mounted) {
+      setState(() {
+        _words = words;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -83,17 +73,57 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
     super.dispose();
   }
 
+  SessionQuestion _mapToQuestion(SpacedWord w) {
+    final wordLower = w.wordEn.toLowerCase();
+    
+    // Create generic dummy options for now
+    final genericOptions = [wordLower, 'example', 'something', 'other'];
+    genericOptions.shuffle();
+
+    // Partial hint generation (e.g. "word" -> "w _ _ _")
+    String hint = '';
+    if (w.wordEn.isNotEmpty) {
+      hint = w.wordEn[0] + ' ' + List.generate(w.wordEn.length - 1, (_) => '_').join(' ');
+    }
+
+    if (w.step <= 1) {
+      return SessionQuestion(
+        type: QuestionType.recognition,
+        targetWord: w.wordEn,
+        sentence: w.exampleSentence ?? 'The translated word is: ${w.wordTr}',
+        options: genericOptions,
+        // Optional false friends
+      );
+    } else if (w.step <= 4) {
+      return SessionQuestion(
+        type: QuestionType.partial,
+        targetWord: w.wordEn,
+        sentence: w.exampleSentence ?? 'The translated word is: ${w.wordTr}',
+        hint: hint,
+      );
+    } else {
+      return SessionQuestion(
+        type: QuestionType.mastery,
+        targetWord: w.wordEn,
+        translation: w.wordTr,
+      );
+    }
+  }
+
   void _checkAnswer(String answer) {
     if (_showFeedback || answer.isEmpty) return;
 
-    final currentQ = _questions[_currentIndex];
+    final currentWord = _words[_currentIndex];
+    final currentQ = _mapToQuestion(currentWord);
     final isCorrect = answer.toLowerCase().trim() == currentQ.targetWord.toLowerCase();
+
+    // Update progress in Firestore in background
+    SpacedRepetitionService.updateWordProgress(currentWord.id, isCorrect);
 
     if (isCorrect) {
       setState(() {
         _isCorrect = true;
       });
-      // Auto advance on correct
       Future.delayed(const Duration(milliseconds: 700), () {
         _nextQuestion();
       });
@@ -117,7 +147,7 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
   void _nextQuestion() {
     if (!mounted) return;
     
-    if (_currentIndex < _questions.length - 1) {
+    if (_currentIndex < _words.length - 1) {
       setState(() {
         _currentIndex++;
         _showFeedback = false;
@@ -125,7 +155,8 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
         _textController.clear();
       });
       
-      if (_questions[_currentIndex].type != QuestionType.recognition) {
+      final currentQ = _mapToQuestion(_words[_currentIndex]);
+      if (currentQ.type != QuestionType.recognition) {
         Future.delayed(const Duration(milliseconds: 100), () {
           _focusNode.requestFocus();
         });
@@ -186,8 +217,36 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final progress = (_currentIndex) / _questions.length;
-    final currentQ = _questions[_currentIndex];
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0A1128),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF3A86FF))),
+      );
+    }
+
+    if (_words.isEmpty) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0A1128),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white54),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: const Center(
+          child: Text(
+            'Bugünlük çalışılacak kelime yok!\nYarın tekrar gel.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white, fontSize: 20, height: 1.5),
+          ),
+        ),
+      );
+    }
+
+    final progress = (_currentIndex) / _words.length;
+    final currentQ = _mapToQuestion(_words[_currentIndex]);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A1128),

@@ -10,6 +10,7 @@ import 'install_prompt_page.dart';
 import 'login_page.dart';
 import 'settings_page.dart';
 import 'session_page.dart';
+import 'spaced_repetition_service.dart';
 
 import 'dart:async';
 import 'auth_service.dart';
@@ -136,19 +137,16 @@ class WordifyHomePage extends StatefulWidget {
 }
 
 class _WordifyHomePageState extends State<WordifyHomePage> {
-  // Demo stat data for the new UI
+  // Demo static values for streak and total learned since they are not in SRS yet
   final int _streak = 12;
   final int _totalLearned = 340;
-  final int _newWordsGoal = 10;
-  final int _newWordsDone = 0;
-  final int _reviewGoal = 25;
-  final int _reviewDone = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateService.checkForUpdates(context);
+      SpacedRepetitionService.initMockDataIfEmpty();
     });
   }
 
@@ -168,6 +166,21 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<Map<String, int>>(
+      stream: SpacedRepetitionService.getTodayStatsStream(),
+      builder: (context, snapshot) {
+        final stats = snapshot.data ?? {'new': 0, 'review': 0};
+        final int _newWordsGoal = 10;
+        final int _reviewGoal = 25;
+        // In real app, the stat might be what's *left* to do, but let's assume it represents tasks to do.
+        // For visual, we treat the stat as "Total Due", and Done is Goal - Due, bounded by 0.
+        final int newDue = stats['new'] ?? 0;
+        final int reviewDue = stats['review'] ?? 0;
+
+        final int newDone = (_newWordsGoal - newDue).clamp(0, _newWordsGoal);
+        final int reviewDone = (_reviewGoal - reviewDue).clamp(0, _reviewGoal);
+        final int currentNewGoal = (newDone + newDue).clamp(_newWordsGoal, 999);
+        final int currentReviewGoal = (reviewDone + reviewDue).clamp(_reviewGoal, 999);
     return Scaffold(
       backgroundColor: const Color(0xFF0A1128),
       appBar: AppBar(
@@ -279,16 +292,16 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                         // Progress Bars
                         _buildProgressBar(
                           title: 'Yeni Kelimeler',
-                          current: _newWordsDone,
-                          total: _newWordsGoal,
+                          current: newDone,
+                          total: currentNewGoal,
                           color: const Color(0xFF3A86FF),
                           icon: Icons.auto_awesome_rounded,
                         ),
                         const SizedBox(height: 24),
                         _buildProgressBar(
                           title: 'Tekrarlar (Review)',
-                          current: _reviewDone,
-                          total: _reviewGoal,
+                          current: reviewDone,
+                          total: currentReviewGoal,
                           color: const Color(0xFF00E676),
                           icon: Icons.refresh_rounded,
                         ),
@@ -364,6 +377,8 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
           ),
         ),
       ),
+    );
+      },
     );
   }
 
