@@ -9,6 +9,7 @@ import 'utils/pwa_check.dart';
 import 'install_prompt_page.dart';
 import 'login_page.dart';
 import 'settings_page.dart';
+import 'session_page.dart';
 
 import 'dart:async';
 import 'auth_service.dart';
@@ -159,13 +160,10 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
   }
 
   void _startSession() {
-    AppToast.show(
+    Navigator.push(
       context,
-      message: 'Güne Başlandı!',
-      backgroundColor: const Color(0xFF3A86FF),
-      icon: Icons.rocket_launch_rounded,
+      MaterialPageRoute(builder: (context) => const SessionPage()),
     );
-    // TODO: Navigate to Session UI
   }
 
   @override
