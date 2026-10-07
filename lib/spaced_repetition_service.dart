@@ -133,31 +133,59 @@ class SpacedRepetitionService {
     }
   }
 
+  static Future<void> resetUserData() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+
+    final userDoc = _firestore.collection('users').doc(uid);
+    final collection = userDoc.collection('words');
+    
+    // Delete all words in batches
+    final snapshot = await collection.get();
+    final batch = _firestore.batch();
+    for (var doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    
+    // Reset index
+    batch.set(userDoc, {'last_word_index': 0}, SetOptions(merge: true));
+    
+    await batch.commit();
+  }
+
   /// Get today's goal stats (new vs review)
   static Stream<Map<String, int>> getTodayStatsStream() {
     final collection = _userWordsCollection();
-    if (collection == null) return Stream.value({'new': 0, 'review': 0});
+    if (collection == null) return Stream.value({'new': 0, 'review': 0, 'total_learned': 0});
 
     final now = DateTime.now();
 
-    return collection
-        .where('next_review_date', isLessThanOrEqualTo: Timestamp.fromDate(now))
-        .snapshots()
-        .map((snapshot) {
+    return collection.snapshots().map((snapshot) {
       int newWords = 0;
       int reviewWords = 0;
+      int totalLearned = 0;
+      
       for (var doc in snapshot.docs) {
         final data = doc.data();
         final isLearning = data['is_learning'] ?? true;
-        if (isLearning) {
-          newWords++;
-        } else {
-          reviewWords++;
+        final nextReview = (data['next_review_date'] as Timestamp?)?.toDate() ?? DateTime.now();
+        
+        if (!isLearning) {
+          totalLearned++;
+        }
+
+        if (nextReview.isBefore(now) || nextReview.isAtSameMomentAs(now)) {
+          if (isLearning) {
+            newWords++;
+          } else {
+            reviewWords++;
+          }
         }
       }
       return {
         'new': newWords,
         'review': reviewWords,
+        'total_learned': totalLearned,
       };
     });
   }

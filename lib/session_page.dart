@@ -56,12 +56,24 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
   }
 
   Future<void> _loadSession() async {
-    final words = await SpacedRepetitionService.getTodaySession();
-    if (mounted) {
-      setState(() {
-        _words = words;
-        _isLoading = false;
-      });
+    try {
+      final words = await SpacedRepetitionService.getTodaySession();
+      if (mounted) {
+        setState(() {
+          _words = words;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading session: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kelime yüklenirken bir hata oluştu: $e')),
+        );
+      }
     }
   }
 

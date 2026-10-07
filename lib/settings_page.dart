@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'auth_service.dart';
 import 'update_service.dart';
 import 'version.dart';
+import 'spaced_repetition_service.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -212,6 +213,47 @@ class SettingsPage extends StatelessWidget {
                   subtitle: 'Eski verileri sıfırlar ve sayfayı yeniler',
                   onTap: () {
                     UpdateService.clearCacheAndReload();
+                  },
+                ),
+                _buildSettingsCard(
+                  icon: Icons.delete_forever_rounded,
+                  iconColor: Colors.redAccent,
+                  title: 'İlerlemeyi Sıfırla',
+                  subtitle: 'Tüm öğrenilmiş kelimeleri ve aşamaları siler',
+                  onTap: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        backgroundColor: const Color(0xFF131D36),
+                        title: const Text('Emin misiniz?', style: TextStyle(color: Colors.white)),
+                        content: const Text(
+                          'Tüm kelime ilerlemeniz kalıcı olarak silinecek ve en baştan başlayacaksınız.',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('İptal', style: TextStyle(color: Colors.white54)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Sıfırla', style: TextStyle(color: Colors.redAccent)),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirm == true) {
+                      await SpacedRepetitionService.resetUserData();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Tüm ilerleme sıfırlandı.'),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
+                      }
+                    }
                   },
                 ),
                 if (user != null) ...[

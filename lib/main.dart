@@ -169,190 +169,179 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     return StreamBuilder<Map<String, int>>(
       stream: SpacedRepetitionService.getTodayStatsStream(),
       builder: (context, snapshot) {
-        final stats = snapshot.data ?? {'new': 0, 'review': 0};
+        final stats = snapshot.data ?? {'new': 0, 'review': 0, 'total_learned': 0};
         final int _newWordsGoal = 10;
         final int _reviewGoal = 25;
-        // In real app, the stat might be what's *left* to do, but let's assume it represents tasks to do.
-        // For visual, we treat the stat as "Total Due", and Done is Goal - Due, bounded by 0.
+        
         final int newDue = stats['new'] ?? 0;
         final int reviewDue = stats['review'] ?? 0;
+        final int totalLearned = stats['total_learned'] ?? 0;
 
         final int newDone = (_newWordsGoal - newDue).clamp(0, _newWordsGoal);
         final int reviewDone = (_reviewGoal - reviewDue).clamp(0, _reviewGoal);
         final int currentNewGoal = (newDone + newDue).clamp(_newWordsGoal, 999);
         final int currentReviewGoal = (reviewDone + reviewDue).clamp(_reviewGoal, 999);
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A1128),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0A1128),
-        elevation: 0,
-        titleSpacing: 20,
-        title: const Row(
-          children: [
-            Icon(
-              Icons.translate,
-              color: Color(0xFF3A86FF),
-              size: 26,
+        
+        final int streak = 0; // Will be implemented with a real streak system later
+
+        return Scaffold(
+          backgroundColor: const Color(0xFF0A1128),
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF0A1128),
+            elevation: 0,
+            titleSpacing: 20,
+            title: const Row(
+              children: [
+                Icon(
+                  Icons.translate,
+                  color: Color(0xFF3A86FF),
+                  size: 26,
+                ),
+                SizedBox(width: 10),
+                Text(
+                  'Wordify',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
             ),
-            SizedBox(width: 10),
-            Text(
-              'Wordify',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 22,
-                letterSpacing: 0.5,
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 12.0),
+                child: IconButton(
+                  icon: const Icon(Icons.settings_outlined, color: Color(0xFF7A9BB8), size: 26),
+                  tooltip: 'Ayarlar',
+                  onPressed: () => _openSettings(context),
+                ),
+              ),
+            ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1.0),
+              child: Container(
+                color: const Color(0xFF192540),
+                height: 1.0,
               ),
             ),
-          ],
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Color(0xFF7A9BB8), size: 26),
-              tooltip: 'Ayarlar',
-              onPressed: () => _openSettings(context),
-            ),
           ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1.0),
-          child: Container(
-            color: const Color(0xFF192540),
-            height: 1.0,
-          ),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 500),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Upper Part: Streak & Total Learned
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 500),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: _buildStatBadge(
-                          icon: Icons.local_fire_department_rounded,
-                          iconColor: Colors.orangeAccent,
-                          value: '$_streak Gün',
-                          label: 'Seri',
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildStatBadge(
-                          icon: Icons.school_rounded,
-                          iconColor: const Color(0xFF3A86FF),
-                          value: '$_totalLearned',
-                          label: 'Öğrenilen',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-                  
-                  // Main Task Card
-                  Container(
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF131D36).withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.05),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        const Text(
-                          'Bugünün Hedefi',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        
-                        // Progress Bars
-                        _buildProgressBar(
-                          title: 'Yeni Kelimeler',
-                          current: newDone,
-                          total: currentNewGoal,
-                          color: const Color(0xFF3A86FF),
-                          icon: Icons.auto_awesome_rounded,
-                        ),
-                        const SizedBox(height: 24),
-                        _buildProgressBar(
-                          title: 'Tekrarlar (Review)',
-                          current: reviewDone,
-                          total: currentReviewGoal,
-                          color: const Color(0xFF00E676),
-                          icon: Icons.refresh_rounded,
-                        ),
-                        
-                        const SizedBox(height: 40),
-                        
-                        // Start Button
-                        Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF3A86FF).withValues(alpha: 0.3),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF3A86FF), Color(0xFF00B4D8)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                      // Upper Part: Streak & Total Learned
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: _buildStatBadge(
+                              icon: Icons.local_fire_department_rounded,
+                              iconColor: Colors.orangeAccent,
+                              value: '$streak Gün',
+                              label: 'Seri',
                             ),
                           ),
-                          child: ElevatedButton(
-                            onPressed: _startSession,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
-                              shape: RoundedRectangleBorder(
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildStatBadge(
+                              icon: Icons.school_rounded,
+                              iconColor: const Color(0xFF3A86FF),
+                              value: '$totalLearned',
+                              label: 'Öğrenilen',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+                      
+                      // Main Task Card
+                      Container(
+                        padding: const EdgeInsets.all(28),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF131D36).withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Bugünün Hedefi',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            
+                            // Progress Bars
+                            _buildProgressBar(
+                              title: 'Yeni Kelimeler',
+                              current: newDone,
+                              total: currentNewGoal,
+                              color: const Color(0xFF3A86FF),
+                              icon: Icons.auto_awesome_rounded,
+                            ),
+                            const SizedBox(height: 24),
+                            _buildProgressBar(
+                              title: 'Tekrarlar (Review)',
+                              current: reviewDone,
+                              total: currentReviewGoal,
+                              color: const Color(0xFF00E676),
+                              icon: Icons.refresh_rounded,
+                            ),
+                            
+                            const SizedBox(height: 40),
+                            
+                            // Start Button
+                            Container(
+                              decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(24),
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF3A86FF), Color(0xFF00B4D8)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
                               ),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Güne Başla',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
+                              child: ElevatedButton(
+                                onPressed: _startSession,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24),
                                   ),
                                 ),
-                                SizedBox(width: 12),
-                                Icon(Icons.arrow_forward_rounded, color: Colors.white),
-                              ],
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Güne Başla',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
