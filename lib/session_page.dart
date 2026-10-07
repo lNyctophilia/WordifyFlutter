@@ -2,24 +2,24 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import 'spaced_repetition_service.dart';
 
-enum QuestionType { recognition, partial, mastery }
+enum QuestionType { partial, mastery }
 
 class SessionQuestion {
   final QuestionType type;
   final String sentence;
+  final String sentenceTr;
   final String translation;
   final String targetWord;
   final String hint;
-  final List<String>? options;
   final Map<String, String>? falseFriends;
 
   SessionQuestion({
     required this.type,
     required this.targetWord,
     this.sentence = '',
+    this.sentenceTr = '',
     this.translation = '',
     this.hint = '',
-    this.options,
     this.falseFriends,
   });
 }
@@ -86,31 +86,25 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
   }
 
   SessionQuestion _mapToQuestion(SpacedWord w) {
-    final wordLower = w.wordEn.toLowerCase();
-    
-    // Create generic dummy options for now
-    final genericOptions = [wordLower, 'example', 'something', 'other'];
-    genericOptions.shuffle();
-
     // Partial hint generation (e.g. "word" -> "w _ _ _")
     String hint = '';
     if (w.wordEn.isNotEmpty) {
-      hint = w.wordEn[0] + ' ' + List.generate(w.wordEn.length - 1, (_) => '_').join(' ');
+      if (w.step <= 1) {
+        // More hint for beginners
+        hint = w.wordEn[0] + ' ' + List.generate(w.wordEn.length - 1, (_) => '_').join(' ');
+      } else {
+        // Harder hint
+        hint = w.wordEn[0] + List.generate(w.wordEn.length - 1, (_) => ' _').join('');
+      }
     }
 
-    if (w.step <= 1) {
-      return SessionQuestion(
-        type: QuestionType.recognition,
-        targetWord: w.wordEn,
-        sentence: w.exampleSentence ?? 'The translated word is: ${w.wordTr}',
-        options: genericOptions,
-        // Optional false friends
-      );
-    } else if (w.step <= 4) {
+    if (w.step <= 3) {
       return SessionQuestion(
         type: QuestionType.partial,
         targetWord: w.wordEn,
-        sentence: w.exampleSentence ?? 'The translated word is: ${w.wordTr}',
+        translation: w.wordTr,
+        sentence: w.exampleSentence ?? '',
+        sentenceTr: w.exampleTr ?? '',
         hint: hint,
       );
     } else {
@@ -167,12 +161,9 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
         _textController.clear();
       });
       
-      final currentQ = _mapToQuestion(_words[_currentIndex]);
-      if (currentQ.type != QuestionType.recognition) {
-        Future.delayed(const Duration(milliseconds: 100), () {
-          _focusNode.requestFocus();
-        });
-      }
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _focusNode.requestFocus();
+      });
     } else {
       _showCompletionDialog();
     }
@@ -366,90 +357,78 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (q.type == QuestionType.recognition || q.type == QuestionType.partial) ...[
-            Text(
-              q.sentence,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w500, height: 1.4),
-            ),
+          Text(
+            q.translation,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Color(0xFF3A86FF), fontSize: 26, fontWeight: FontWeight.bold),
+          ),
+          
+          if (q.type == QuestionType.partial) ...[
+            const SizedBox(height: 24),
+            if (q.sentenceTr.isNotEmpty)
+              Text(
+                q.sentenceTr,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white54, fontSize: 16, fontStyle: FontStyle.italic),
+              ),
+            if (q.sentence.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                q.sentence,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w500, height: 1.4),
+              ),
+            ],
             if (q.hint.isNotEmpty) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               Text(
                 q.hint,
-                style: const TextStyle(color: Color(0xFF3A86FF), fontSize: 20, letterSpacing: 4, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Color(0xFF00B4D8), fontSize: 22, letterSpacing: 4, fontWeight: FontWeight.bold),
               ),
             ],
           ] else if (q.type == QuestionType.mastery) ...[
-            const Icon(Icons.school_rounded, color: Color(0xFF3A86FF), size: 48),
             const SizedBox(height: 16),
-            Text(
-              q.translation,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
-            ),
+            const Icon(Icons.school_rounded, color: Color(0xFF3A86FF), size: 48),
           ],
           
           const SizedBox(height: 48),
           
-          if (q.type == QuestionType.recognition && q.options != null) ...[
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 2.5,
-              physics: const NeverScrollableScrollPhysics(),
-              children: q.options!.map((opt) {
-                return ElevatedButton(
-                  onPressed: () => _checkAnswer(opt),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1E2D4A),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: Text(opt, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                );
-              }).toList(),
-            ),
-          ] else ...[
-            TextField(
-              controller: _textController,
-              focusNode: _focusNode,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-              decoration: InputDecoration(
-                hintText: q.type == QuestionType.mastery ? 'İngilizcesini yazın...' : '',
-                hintStyle: const TextStyle(color: Colors.white30, letterSpacing: 0, fontSize: 18),
-                filled: true,
-                fillColor: const Color(0xFF0A1128),
-                contentPadding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: Color(0xFF3A86FF), width: 2),
-                ),
+          TextField(
+            controller: _textController,
+            focusNode: _focusNode,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+            decoration: InputDecoration(
+              hintText: 'İngilizcesini yazın...',
+              hintStyle: const TextStyle(color: Colors.white30, letterSpacing: 0, fontSize: 18),
+              filled: true,
+              fillColor: const Color(0xFF0A1128),
+              contentPadding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
               ),
-              onSubmitted: _checkAnswer,
-              textInputAction: TextInputAction.done,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _checkAnswer(_textController.text),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3A86FF),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: const Text('Kontrol Et', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Color(0xFF3A86FF), width: 2),
               ),
             ),
-          ],
+            onSubmitted: _checkAnswer,
+            textInputAction: TextInputAction.done,
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => _checkAnswer(_textController.text),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3A86FF),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('Kontrol Et', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
         ],
       ),
     );

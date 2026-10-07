@@ -9,6 +9,7 @@ class SpacedWord {
   final String wordEn;
   final String wordTr;
   final String? exampleSentence;
+  final String? exampleTr;
   final DateTime nextReviewDate;
   final int step;
   final bool isLearning;
@@ -18,6 +19,7 @@ class SpacedWord {
     required this.wordEn,
     required this.wordTr,
     this.exampleSentence,
+    this.exampleTr,
     required this.nextReviewDate,
     required this.step,
     required this.isLearning,
@@ -29,6 +31,7 @@ class SpacedWord {
       wordEn: data['word_en'] ?? '',
       wordTr: data['word_tr'] ?? '',
       exampleSentence: data['example_sentence'],
+      exampleTr: data['example_tr'],
       nextReviewDate: (data['next_review_date'] as Timestamp?)?.toDate() ?? DateTime.now(),
       step: data['step'] ?? 0,
       isLearning: data['is_learning'] ?? true,
@@ -40,6 +43,7 @@ class SpacedWord {
       'word_en': wordEn,
       'word_tr': wordTr,
       'example_sentence': exampleSentence,
+      'example_tr': exampleTr,
       'next_review_date': Timestamp.fromDate(nextReviewDate),
       'step': step,
       'is_learning': isLearning,
@@ -109,17 +113,24 @@ class SpacedRepetitionService {
       if (parts.length >= 2) {
         final wordEn = parts[0].trim();
         final wordTr = parts[1].trim();
+        String exampleTr = '';
         String exampleEn = '';
+        
         if (parts.length >= 4) {
+          exampleTr = parts[2].trim();
           exampleEn = parts[3].trim();
+          // Blank out the answer in the English sentence (which is often enclosed in parentheses)
+          exampleEn = exampleEn.replaceAll(RegExp(r'\((.*?)\)'), '________');
         }
 
         final docRef = collection.doc(wordEn);
         batch.set(docRef, {
           'word_en': wordEn,
           'word_tr': wordTr,
-          'example_sentence': exampleEn.isNotEmpty ? exampleEn : 'The translated word is: $wordTr',
-          'next_review_date': FieldValue.serverTimestamp(),
+          'example_sentence': exampleEn.isNotEmpty ? exampleEn : '',
+          'example_tr': exampleTr.isNotEmpty ? exampleTr : '',
+          // Ensure the date is slightly in the past so it passes the <= now check immediately
+          'next_review_date': Timestamp.fromDate(DateTime.now().subtract(const Duration(minutes: 5))),
           'step': 0,
           'is_learning': true,
         });
