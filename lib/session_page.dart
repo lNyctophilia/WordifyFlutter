@@ -2,30 +2,47 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import 'spaced_repetition_service.dart';
 
-enum QuestionType { partial, mastery }
+enum QuestionType {
+  /// Aşama 1: Tanıma (Recognition) - 1. ve 2. Tekrarlar (Adım 0-1)
+  /// 4 şıklı çoktan seçmeli cloze testi
+  recognition,
+
+  /// Aşama 2: Kısmi Üretme (Partial Production) - 3. ve 4. Tekrarlar (Adım 2-3)
+  /// Cümle boşluğu + ilk harf ve uzunluk ipucu ile klavye girişi
+  partial,
+
+  /// Aşama 3: Tam Ustalık (Mastery) - 5. Tekrar ve sonrası (Adım 4+)
+  /// İpucu yok, sadece Türkçe anlam verilir, kelimenin tamamı yazılır
+  mastery,
+}
 
 class SessionQuestion {
   final QuestionType type;
+  final String targetWord;
+  final String translation;
   final String sentence;
   final String sentenceTr;
-  final String translation;
-  final String targetWord;
   final String hint;
-  final Map<String, String>? falseFriends;
+  final List<String> options;
 
   SessionQuestion({
     required this.type,
     required this.targetWord,
+    required this.translation,
     this.sentence = '',
     this.sentenceTr = '',
-    this.translation = '',
     this.hint = '',
-    this.falseFriends,
+    this.options = const [],
   });
 }
 
 class SessionPage extends StatefulWidget {
-  const SessionPage({super.key});
+  final int day;
+
+  const SessionPage({
+    super.key,
+    this.day = 1,
+  });
 
   @override
   State<SessionPage> createState() => _SessionPageState();
@@ -33,12 +50,14 @@ class SessionPage extends StatefulWidget {
 
 class _SessionPageState extends State<SessionPage> with SingleTickerProviderStateMixin {
   List<SpacedWord> _words = [];
+  List<SessionQuestion> _questions = [];
   bool _isLoading = true;
   int _currentIndex = 0;
 
   bool _showFeedback = false;
   String? _falseFriendWarning;
   bool _isCorrect = false;
+  String? _selectedOption;
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
@@ -57,10 +76,13 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
 
   Future<void> _loadSession() async {
     try {
-      final words = await SpacedRepetitionService.getTodaySession();
+      final words = await SpacedRepetitionService.getSessionForDay(widget.day);
+      final questions = words.map(_mapToQuestion).toList();
+
       if (mounted) {
         setState(() {
           _words = words;
+          _questions = questions;
           _isLoading = false;
         });
       }
@@ -86,65 +108,94 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
   }
 
   SessionQuestion _mapToQuestion(SpacedWord w) {
-    // Partial hint generation (e.g. "word" -> "w _ _ _")
-    String hint = '';
-    if (w.wordEn.isNotEmpty) {
-      if (w.step <= 1) {
-        // More hint for beginners
-        hint = w.wordEn[0] + ' ' + List.generate(w.wordEn.length - 1, (_) => '_').join(' ');
-      } else {
-        // Harder hint
-        hint = w.wordEn[0] + List.generate(w.wordEn.length - 1, (_) => ' _').join('');
-      }
+    String sentence = w.exampleSentence ?? '';
+    if (sentence.isEmpty) {
+      sentence = '_____';
+    } else if (!sentence.contains('_____')) {
+      sentence = sentence.replaceAll(
+        RegExp(RegExp.escape(w.wordEn), caseSensitive: false),
+        '_____',
+      );
     }
 
-    if (w.step <= 3) {
+    if (w.step <= 1) {
+      // Aşama 1: Tanıma (Recognition) - 4 şıklı çoktan seçmeli
+      final distractors = SpacedRepetitionService.getRandomDistractors(w.wordEn, count: 3);
+      final options = [w.wordEn, ...distractors]..shuffle();
+
+      return SessionQuestion(
+        type: QuestionType.recognition,
+        targetWord: w.wordEn,
+        translation: w.wordTr,
+        sentence: sentence,
+        sentenceTr: w.exampleTr ?? '',
+        options: options,
+      );
+    } else if (w.step <= 3) {
+      // Aşama 2: Kısmi Üretme (Partial Production) - İlk harf + uzunluk ipucu
+      String hint = '';
+      if (w.wordEn.isNotEmpty) {
+        hint = w.wordEn[0] + List.generate(w.wordEn.length - 1, (_) => ' _').join('');
+      }
+
       return SessionQuestion(
         type: QuestionType.partial,
         targetWord: w.wordEn,
         translation: w.wordTr,
-        sentence: w.exampleSentence ?? '',
+        sentence: sentence,
         sentenceTr: w.exampleTr ?? '',
         hint: hint,
       );
     } else {
+      // Aşama 3: Tam Ustalık (Mastery) - İpuçsuz doğrudan çeviri
       return SessionQuestion(
         type: QuestionType.mastery,
         targetWord: w.wordEn,
         translation: w.wordTr,
+        sentenceTr: w.exampleTr ?? '',
       );
     }
   }
 
-  void _checkAnswer(String answer) {
-    if (_showFeedback || answer.isEmpty) return;
+  void _checkAnswer(String rawAnswer) {
+    if (_showFeedback || _questions.isEmpty) return;
+    final answer = rawAnswer.trim();
+    if (answer.isEmpty) return;
 
     final currentWord = _words[_currentIndex];
-    final currentQ = _mapToQuestion(currentWord);
-    final isCorrect = answer.toLowerCase().trim() == currentQ.targetWord.toLowerCase();
+    final currentQ = _questions[_currentIndex];
+    final isCorrect = answer.toLowerCase() == currentQ.targetWord.toLowerCase();
 
-    // Update progress in Firestore in background
-    SpacedRepetitionService.updateWordProgress(currentWord.id, isCorrect);
+    // SRS ilerlemesini güncelle
+    SpacedRepetitionService.updateWordProgress(
+      currentWord.id,
+      isCorrect,
+      activeDay: widget.day,
+    );
 
     if (isCorrect) {
       setState(() {
         _isCorrect = true;
+        _selectedOption = answer;
       });
       Future.delayed(const Duration(milliseconds: 700), () {
         _nextQuestion();
       });
     } else {
       _shakeController.forward(from: 0.0);
-      
+
+      // Aşama 4: Akıllı Hata Geri Bildirimi (Smart Feedback)
+      // Kullanıcının yazdığı veya seçtiği yanlış kelimenin sözlük karşılığını bul
       String? falseFriend;
-      final ans = answer.toLowerCase().trim();
-      if (currentQ.falseFriends != null && currentQ.falseFriends!.containsKey(ans)) {
-        falseFriend = "Senin yazdığın '$ans' kelimesi '${currentQ.falseFriends![ans]}' anlamına gelir.";
+      final enteredMeaning = SpacedRepetitionService.getWordMeaning(answer);
+      if (enteredMeaning != null && enteredMeaning.isNotEmpty) {
+        falseFriend = "Senin yazdığın/seçtiğin '$answer' kelimesi '$enteredMeaning' anlamına gelir.";
       }
 
       setState(() {
         _isCorrect = false;
         _showFeedback = true;
+        _selectedOption = answer;
         _falseFriendWarning = falseFriend;
       });
     }
@@ -152,18 +203,22 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
 
   void _nextQuestion() {
     if (!mounted) return;
-    
-    if (_currentIndex < _words.length - 1) {
+
+    if (_currentIndex < _questions.length - 1) {
       setState(() {
         _currentIndex++;
         _showFeedback = false;
         _isCorrect = false;
+        _selectedOption = null;
+        _falseFriendWarning = null;
         _textController.clear();
       });
-      
-      Future.delayed(const Duration(milliseconds: 100), () {
-        _focusNode.requestFocus();
-      });
+
+      if (_questions[_currentIndex].type != QuestionType.recognition) {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _focusNode.requestFocus();
+        });
+      }
     } else {
       _showCompletionDialog();
     }
@@ -190,7 +245,7 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Bugünkü hedeflerini tamamladın. Yarın görüşmek üzere!',
+                  'Bugünkü öğrenme ve tekrar görevlerini başarıyla tamamladın.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white70, fontSize: 16),
                 ),
@@ -207,7 +262,10 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: const Text('Ana Sayfaya Dön', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      'Ana Sayfaya Dön',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ],
@@ -227,7 +285,7 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
       );
     }
 
-    if (_words.isEmpty) {
+    if (_questions.isEmpty) {
       return Scaffold(
         backgroundColor: const Color(0xFF0A1128),
         appBar: AppBar(
@@ -248,8 +306,8 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
       );
     }
 
-    final progress = (_currentIndex) / _words.length;
-    final currentQ = _mapToQuestion(_words[_currentIndex]);
+    final progress = (_currentIndex + 1) / _questions.length;
+    final currentQ = _questions[_currentIndex];
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A1128),
@@ -289,12 +347,15 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
                           );
                         },
                         child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 400),
+                          duration: const Duration(milliseconds: 350),
                           transitionBuilder: (child, animation) {
                             return FadeTransition(
                               opacity: animation,
                               child: SlideTransition(
-                                position: Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero).animate(animation),
+                                position: Tween<Offset>(
+                                  begin: const Offset(0.05, 0),
+                                  end: Offset.zero,
+                                ).animate(animation),
                                 child: child,
                               ),
                             );
@@ -307,8 +368,8 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
                 ),
               ],
             ),
-            
-            // Smart Feedback Overlay
+
+            // Aşama 4: Akıllı Hata Geri Bildirimi Alt Kartı
             if (_showFeedback)
               Positioned(
                 bottom: 0,
@@ -316,7 +377,7 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
                 right: 0,
                 child: TweenAnimationBuilder<Offset>(
                   tween: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero),
-                  duration: const Duration(milliseconds: 300),
+                  duration: const Duration(milliseconds: 250),
                   curve: Curves.easeOutCubic,
                   builder: (context, offset, child) {
                     return FractionalTranslation(
@@ -334,21 +395,49 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
   }
 
   Widget _buildCard(SessionQuestion q, {required Key key}) {
+    String typeBadgeTitle;
+    IconData typeBadgeIcon;
+    Color typeBadgeColor;
+
+    switch (q.type) {
+      case QuestionType.recognition:
+        typeBadgeTitle = 'Aşama 1: Tanıma (Çoktan Seçmeli)';
+        typeBadgeIcon = Icons.visibility_rounded;
+        typeBadgeColor = const Color(0xFF00B4D8);
+        break;
+      case QuestionType.partial:
+        typeBadgeTitle = 'Aşama 2: Kısmi Üretme (İpuçlu Yazma)';
+        typeBadgeIcon = Icons.edit_note_rounded;
+        typeBadgeColor = const Color(0xFF3A86FF);
+        break;
+      case QuestionType.mastery:
+        typeBadgeTitle = 'Aşama 3: Tam Ustalık (Doğrudan Yazma)';
+        typeBadgeIcon = Icons.workspace_premium_rounded;
+        typeBadgeColor = const Color(0xFFFFB703);
+        break;
+    }
+
     return Container(
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 500),
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: _isCorrect ? const Color(0xFF00E676).withValues(alpha: 0.1) : const Color(0xFF131D36),
+        color: _isCorrect
+            ? const Color(0xFF00E676).withValues(alpha: 0.1)
+            : const Color(0xFF131D36),
         borderRadius: BorderRadius.circular(32),
         border: Border.all(
-          color: _isCorrect ? const Color(0xFF00E676).withValues(alpha: 0.5) : const Color(0xFF1E2D4A),
+          color: _isCorrect
+              ? const Color(0xFF00E676).withValues(alpha: 0.5)
+              : const Color(0xFF1E2D4A),
           width: 2,
         ),
         boxShadow: [
           BoxShadow(
-            color: _isCorrect ? const Color(0xFF00E676).withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.2),
+            color: _isCorrect
+                ? const Color(0xFF00E676).withValues(alpha: 0.2)
+                : Colors.black.withValues(alpha: 0.2),
             blurRadius: 32,
             offset: const Offset(0, 12),
           ),
@@ -357,80 +446,203 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Aşama Etiketi
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: typeBadgeColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: typeBadgeColor.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(typeBadgeIcon, size: 16, color: typeBadgeColor),
+                const SizedBox(width: 6),
+                Text(
+                  typeBadgeTitle,
+                  style: TextStyle(
+                    color: typeBadgeColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Türkçe Anlam
           Text(
             q.translation,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF3A86FF), fontSize: 26, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Color(0xFF3A86FF),
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          
-          if (q.type == QuestionType.partial) ...[
-            const SizedBox(height: 24),
-            if (q.sentenceTr.isNotEmpty)
-              Text(
-                q.sentenceTr,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white54, fontSize: 16, fontStyle: FontStyle.italic),
+
+          if (q.sentenceTr.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              q.sentenceTr,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 15,
+                fontStyle: FontStyle.italic,
               ),
+            ),
+          ],
+
+          if (q.type == QuestionType.recognition || q.type == QuestionType.partial) ...[
             if (q.sentence.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               Text(
                 q.sentence,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w500, height: 1.4),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w500,
+                  height: 1.4,
+                ),
               ),
             ],
-            if (q.hint.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              Text(
-                q.hint,
-                style: const TextStyle(color: Color(0xFF00B4D8), fontSize: 22, letterSpacing: 4, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ] else if (q.type == QuestionType.mastery) ...[
-            const SizedBox(height: 16),
-            const Icon(Icons.school_rounded, color: Color(0xFF3A86FF), size: 48),
           ],
-          
-          const SizedBox(height: 48),
-          
-          TextField(
-            controller: _textController,
-            focusNode: _focusNode,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-            decoration: InputDecoration(
-              hintText: 'İngilizcesini yazın...',
-              hintStyle: const TextStyle(color: Colors.white30, letterSpacing: 0, fontSize: 18),
-              filled: true,
-              fillColor: const Color(0xFF0A1128),
-              contentPadding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: Color(0xFF3A86FF), width: 2),
+
+          if (q.type == QuestionType.partial && q.hint.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text(
+              q.hint,
+              style: const TextStyle(
+                color: Color(0xFF00B4D8),
+                fontSize: 24,
+                letterSpacing: 4,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            onSubmitted: _checkAnswer,
-            textInputAction: TextInputAction.done,
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => _checkAnswer(_textController.text),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3A86FF),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              child: const Text('Kontrol Et', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-          ),
+          ],
+
+          const SizedBox(height: 36),
+
+          // Soru Tipine Göre Giriş / Şık Alanı
+          if (q.type == QuestionType.recognition)
+            _buildRecognitionOptions(q)
+          else
+            _buildInputField(),
         ],
       ),
+    );
+  }
+
+  Widget _buildRecognitionOptions(SessionQuestion q) {
+    return Column(
+      children: q.options.map((option) {
+        final isSelected = _selectedOption?.toLowerCase() == option.toLowerCase();
+        final isOptionTarget = option.toLowerCase() == q.targetWord.toLowerCase();
+
+        Color bgColor = const Color(0xFF0A1128);
+        Color borderColor = const Color(0xFF1E2D4A);
+        Color textColor = Colors.white;
+
+        if (_isCorrect && isOptionTarget) {
+          bgColor = const Color(0xFF00E676).withValues(alpha: 0.2);
+          borderColor = const Color(0xFF00E676);
+          textColor = const Color(0xFF00E676);
+        } else if (_showFeedback) {
+          if (isOptionTarget) {
+            bgColor = const Color(0xFF00E676).withValues(alpha: 0.2);
+            borderColor = const Color(0xFF00E676);
+            textColor = const Color(0xFF00E676);
+          } else if (isSelected) {
+            bgColor = Colors.redAccent.withValues(alpha: 0.2);
+            borderColor = Colors.redAccent;
+            textColor = Colors.redAccent;
+          }
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12.0),
+          child: SizedBox(
+            width: double.infinity,
+            child: InkWell(
+              onTap: (_showFeedback || _isCorrect) ? null : () => _checkAnswer(option),
+              borderRadius: BorderRadius.circular(16),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderColor, width: 2),
+                ),
+                child: Text(
+                  option,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildInputField() {
+    return Column(
+      children: [
+        TextField(
+          controller: _textController,
+          focusNode: _focusNode,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+          decoration: InputDecoration(
+            hintText: 'İngilizcesini yazın...',
+            hintStyle: const TextStyle(color: Colors.white30, letterSpacing: 0, fontSize: 18),
+            filled: true,
+            fillColor: const Color(0xFF0A1128),
+            contentPadding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFF3A86FF), width: 2),
+            ),
+          ),
+          onSubmitted: _checkAnswer,
+          textInputAction: TextInputAction.done,
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => _checkAnswer(_textController.text),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3A86FF),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+            child: const Text(
+              'Kontrol Et',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -451,7 +663,10 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.2), shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
                   child: const Icon(Icons.close_rounded, color: Colors.redAccent),
                 ),
                 const SizedBox(width: 16),
@@ -459,13 +674,30 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Yanlış Cevap', style: TextStyle(color: Colors.redAccent, fontSize: 14, fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Yanlış Cevap',
+                        style: TextStyle(
+                          color: Colors.redAccent,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text.rich(
                         TextSpan(
                           children: [
-                            const TextSpan(text: 'Doğrusu: ', style: TextStyle(color: Colors.white70, fontSize: 18)),
-                            TextSpan(text: q.targetWord, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                            const TextSpan(
+                              text: 'Doğrusu: ',
+                              style: TextStyle(color: Colors.white70, fontSize: 18),
+                            ),
+                            TextSpan(
+                              text: q.targetWord,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -491,7 +723,11 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
                     Expanded(
                       child: Text(
                         _falseFriendWarning!,
-                        style: const TextStyle(color: Colors.orangeAccent, fontSize: 14, height: 1.4),
+                        style: const TextStyle(
+                          color: Colors.orangeAccent,
+                          fontSize: 14,
+                          height: 1.4,
+                        ),
                       ),
                     ),
                   ],
@@ -506,7 +742,10 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              child: const Text('Anladım (Devam Et)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Anladım (Devam Et)',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,12 +10,8 @@ import 'login_page.dart';
 import 'settings_page.dart';
 import 'session_page.dart';
 import 'spaced_repetition_service.dart';
-
-import 'dart:async';
 import 'auth_service.dart';
-import 'progress_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'utils/app_toast.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -137,10 +132,6 @@ class WordifyHomePage extends StatefulWidget {
 }
 
 class _WordifyHomePageState extends State<WordifyHomePage> {
-  // Demo static values for streak and total learned since they are not in SRS yet
-  final int _streak = 12;
-  final int _totalLearned = 340;
-
   @override
   void initState() {
     super.initState();
@@ -157,197 +148,258 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     );
   }
 
-  void _startSession() {
+  void _startSession(int day) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const SessionPage()),
+      MaterialPageRoute(builder: (context) => SessionPage(day: day)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<Map<String, int>>(
-      stream: SpacedRepetitionService.getTodayStatsStream(),
-      builder: (context, snapshot) {
-        final stats = snapshot.data ?? {'new': 0, 'review': 0, 'total_learned': 0};
-        final int _newWordsGoal = 10;
-        final int _reviewGoal = 25;
-        
-        final int newDue = stats['new'] ?? 0;
-        final int reviewDue = stats['review'] ?? 0;
-        final int totalLearned = stats['total_learned'] ?? 0;
-        final int totalWords = stats['total_words'] ?? 0;
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: SpacedRepetitionService.getUserProfileStream(),
+      builder: (context, profileSnapshot) {
+        final profile = profileSnapshot.data ?? {};
+        final activeDay = (profile['current_day'] as num?)?.toInt() ?? 1;
+        final streak = (profile['streak'] as num?)?.toInt() ?? 0;
+        final rawActivity = profile['weekly_activity'];
+        List<double> weeklyActivity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        if (rawActivity is List) {
+          weeklyActivity = rawActivity.map((e) => ((e as num?)?.toDouble() ?? 0.0).clamp(0.0, 1.0)).toList();
+        }
 
-        final bool hasStarted = totalWords > 0;
+        return StreamBuilder<Map<String, int>>(
+          stream: SpacedRepetitionService.getStatsStreamForDay(activeDay),
+          builder: (context, snapshot) {
+            final stats = snapshot.data ?? {'new': 0, 'review': 0, 'total_learned': 0};
+            const int newWordsGoal = 10;
+            const int reviewGoal = 25;
+            
+            final int newDue = stats['new'] ?? 0;
+            final int reviewDue = stats['review'] ?? 0;
+            final int totalLearned = stats['total_learned'] ?? 0;
+            final int totalWords = stats['total_words'] ?? 0;
 
-        final int newDone = hasStarted ? (_newWordsGoal - newDue).clamp(0, _newWordsGoal) : 0;
-        final int reviewDone = hasStarted ? (_reviewGoal - reviewDue).clamp(0, _reviewGoal) : 0;
-        final int currentNewGoal = (newDone + newDue).clamp(_newWordsGoal, 999);
-        final int currentReviewGoal = (reviewDone + reviewDue).clamp(_reviewGoal, 999);
-        
-        final int streak = 0; // Will be implemented with a real streak system later
+            final bool hasStarted = totalWords > 0;
 
-        return Scaffold(
-          backgroundColor: const Color(0xFF0A1128),
-          appBar: AppBar(
-            backgroundColor: const Color(0xFF0A1128),
-            elevation: 0,
-            titleSpacing: 20,
-            title: const Row(
-              children: [
-                Icon(
-                  Icons.translate,
-                  color: Color(0xFF3A86FF),
-                  size: 26,
+            final int newDone = hasStarted ? (newWordsGoal - newDue).clamp(0, newWordsGoal) : 0;
+            final int reviewDone = hasStarted ? (reviewGoal - reviewDue).clamp(0, reviewGoal) : 0;
+            final int currentNewGoal = (newDone + newDue).clamp(newWordsGoal, 999);
+            final int currentReviewGoal = (reviewDone + reviewDue).clamp(reviewGoal, 999);
+
+            return Scaffold(
+              backgroundColor: const Color(0xFF0A1128),
+              appBar: AppBar(
+                backgroundColor: const Color(0xFF0A1128),
+                elevation: 0,
+                titleSpacing: 20,
+                title: const Row(
+                  children: [
+                    Icon(
+                      Icons.translate,
+                      color: Color(0xFF3A86FF),
+                      size: 26,
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      'Wordify',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: 10),
-                Text(
-                  'Wordify',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 22,
-                    letterSpacing: 0.5,
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12.0),
+                    child: IconButton(
+                      icon: const Icon(Icons.settings_outlined, color: Color(0xFF7A9BB8), size: 26),
+                      tooltip: 'Ayarlar',
+                      onPressed: () => _openSettings(context),
+                    ),
+                  ),
+                ],
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(1.0),
+                  child: Container(
+                    color: const Color(0xFF192540),
+                    height: 1.0,
                   ),
                 ),
-              ],
-            ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 12.0),
-                child: IconButton(
-                  icon: const Icon(Icons.settings_outlined, color: Color(0xFF7A9BB8), size: 26),
-                  tooltip: 'Ayarlar',
-                  onPressed: () => _openSettings(context),
-                ),
               ),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1.0),
-              child: Container(
-                color: const Color(0xFF192540),
-                height: 1.0,
-              ),
-            ),
-          ),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 500),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Upper Part: Streak & Total Learned
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              body: SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 500),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: _buildStatBadge(
-                              icon: Icons.local_fire_department_rounded,
-                              iconColor: Colors.orangeAccent,
-                              value: '$streak Gün',
-                              label: 'Seri',
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildStatBadge(
-                              icon: Icons.school_rounded,
-                              iconColor: const Color(0xFF3A86FF),
-                              value: '$totalLearned',
-                              label: 'Öğrenilen',
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      
-                      // Main Task Card
-                      Container(
-                        padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF131D36).withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.05),
-                            width: 1,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            const Text(
-                              'Bugünün Hedefi',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-                            
-                            // Progress Bars
-                            _buildProgressBar(
-                              title: 'Yeni Kelimeler',
-                              current: newDone,
-                              total: currentNewGoal,
-                              color: const Color(0xFF3A86FF),
-                              icon: Icons.auto_awesome_rounded,
-                            ),
-                            const SizedBox(height: 24),
-                            _buildProgressBar(
-                              title: 'Tekrarlar (Review)',
-                              current: reviewDone,
-                              total: currentReviewGoal,
-                              color: const Color(0xFF00E676),
-                              icon: Icons.refresh_rounded,
-                            ),
-                            
-                            const SizedBox(height: 40),
-                            
-                            // Start Button
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(24),
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF3A86FF), Color(0xFF00B4D8)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
+                          // Upper Part: Streak & Total Learned
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: _buildStatBadge(
+                                  icon: Icons.local_fire_department_rounded,
+                                  iconColor: Colors.orangeAccent,
+                                  value: '$streak Gün',
+                                  label: 'Seri',
                                 ),
                               ),
-                              child: ElevatedButton(
-                                onPressed: _startSession,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                  ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _buildStatBadge(
+                                  icon: Icons.school_rounded,
+                                  iconColor: const Color(0xFF3A86FF),
+                                  value: '$totalLearned',
+                                  label: 'Öğrenilen',
                                 ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Day Navigation Switcher
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF131D36),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                                  tooltip: 'Önceki Gün',
+                                  onPressed: activeDay > 1
+                                      ? () => SpacedRepetitionService.setCurrentDay(activeDay - 1)
+                                      : null,
+                                ),
+                                Column(
                                   children: [
                                     Text(
-                                      'Güne Başla',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
+                                      'Gün $activeDay',
+                                      style: const TextStyle(
                                         color: Colors.white,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
                                         letterSpacing: 0.5,
                                       ),
                                     ),
-                                    SizedBox(width: 12),
-                                    Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      activeDay == 1 ? 'Başlangıç Günü' : 'Eğitim & Tekrar',
+                                      style: const TextStyle(
+                                        color: Color(0xFF3A86FF),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ],
                                 ),
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 20),
+                                  tooltip: 'Sonraki Gün',
+                                  onPressed: () => SpacedRepetitionService.setCurrentDay(activeDay + 1),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Main Task Card
+                          Container(
+                            padding: const EdgeInsets.all(28),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF131D36).withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.05),
+                                width: 1,
                               ),
                             ),
-                      ],
-                    ),
-                  ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Gün $activeDay Hedefi',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 32),
+                                
+                                // Progress Bars
+                                _buildProgressBar(
+                                  title: 'Yeni Kelimeler',
+                                  current: newDone,
+                                  total: currentNewGoal,
+                                  color: const Color(0xFF3A86FF),
+                                  icon: Icons.auto_awesome_rounded,
+                                ),
+                                const SizedBox(height: 24),
+                                _buildProgressBar(
+                                  title: 'Tekrarlar (Review)',
+                                  current: reviewDone,
+                                  total: currentReviewGoal,
+                                  color: const Color(0xFF00E676),
+                                  icon: Icons.refresh_rounded,
+                                ),
+                                
+                                const SizedBox(height: 40),
+                                
+                                // Start Button
+                                Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(24),
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF3A86FF), Color(0xFF00B4D8)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: () => _startSession(activeDay),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      shadowColor: Colors.transparent,
+                                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'Eğitime Başla',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        SizedBox(width: 12),
+                                        Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
                   
                   const SizedBox(height: 32),
                   
@@ -362,7 +414,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _buildWeeklyActivityGraph(),
+                  _buildWeeklyActivityGraph(weeklyActivity),
                 ],
               ),
             ),
@@ -370,6 +422,8 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
         ),
       ),
     );
+          },
+        );
       },
     );
   }
@@ -485,9 +539,8 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     );
   }
 
-  Widget _buildWeeklyActivityGraph() {
+  Widget _buildWeeklyActivityGraph(List<double> activity) {
     final days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-    final activity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
     
     return Container(
       padding: const EdgeInsets.all(24),
