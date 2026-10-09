@@ -132,6 +132,8 @@ class WordifyHomePage extends StatefulWidget {
 }
 
 class _WordifyHomePageState extends State<WordifyHomePage> {
+  int? _selectedDay;
+
   @override
   void initState() {
     super.initState();
@@ -161,7 +163,9 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
       stream: SpacedRepetitionService.getUserProfileStream(),
       builder: (context, profileSnapshot) {
         final profile = profileSnapshot.data ?? {};
-        final activeDay = (profile['current_day'] as num?)?.toInt() ?? 1;
+        final dbDay = (profile['current_day'] as num?)?.toInt() ?? 1;
+        _selectedDay ??= dbDay;
+        final activeDay = _selectedDay!;
         final streak = (profile['streak'] as num?)?.toInt() ?? 0;
         final rawActivity = profile['weekly_activity'];
         List<double> weeklyActivity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
@@ -280,7 +284,11 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
                                   tooltip: 'Önceki Gün',
                                   onPressed: activeDay > 1
-                                      ? () => SpacedRepetitionService.setCurrentDay(activeDay - 1)
+                                      ? () {
+                                          final prev = activeDay - 1;
+                                          setState(() => _selectedDay = prev);
+                                          SpacedRepetitionService.setCurrentDay(prev);
+                                        }
                                       : null,
                                 ),
                                 Column(
@@ -308,7 +316,11 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                 IconButton(
                                   icon: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 20),
                                   tooltip: 'Sonraki Gün',
-                                  onPressed: () => SpacedRepetitionService.setCurrentDay(activeDay + 1),
+                                  onPressed: () {
+                                    final next = activeDay + 1;
+                                    setState(() => _selectedDay = next);
+                                    SpacedRepetitionService.setCurrentDay(next);
+                                  },
                                 ),
                               ],
                             ),

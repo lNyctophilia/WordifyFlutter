@@ -76,12 +76,14 @@ class SpacedRepetitionService {
     return _firestore.collection('users').doc(uid).collection('words');
   }
 
+  static int _cachedDay = 1;
+
   /// Kullanıcı profil verilerini (seri, haftalık aktivite vb.) izleyen Stream
   static Stream<Map<String, dynamic>> getUserProfileStream() {
     final doc = _userDoc();
     if (doc == null) {
       return Stream.value({
-        'current_day': 1,
+        'current_day': _cachedDay,
         'streak': 0,
         'weekly_activity': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
       });
@@ -100,8 +102,13 @@ class SpacedRepetitionService {
         }
       }
 
+      final dbDay = (data['current_day'] ?? data['currentDay'] as num?)?.toInt();
+      if (dbDay != null && dbDay > _cachedDay) {
+        _cachedDay = dbDay;
+      }
+
       return {
-        'current_day': (data['current_day'] as num?)?.toInt() ?? 1,
+        'current_day': _cachedDay,
         'streak': streak,
         'weekly_activity': activity,
       };
@@ -231,26 +238,47 @@ class SpacedRepetitionService {
   /// Kullanıcının aktif gününü izleyen Stream
   static Stream<int> getUserDayStream() {
     final doc = _userDoc();
-    if (doc == null) return Stream.value(1);
+    if (doc == null) return Stream.value(_cachedDay);
     return doc.snapshots().map((snapshot) {
-      return (snapshot.data()?['current_day'] as num?)?.toInt() ?? 1;
+      final dbDay = (snapshot.data()?['current_day'] ?? snapshot.data()?['currentDay'] as num?)?.toInt();
+      if (dbDay != null && dbDay > _cachedDay) {
+        _cachedDay = dbDay;
+      }
+      return _cachedDay;
     });
   }
 
   /// Kullanıcının kayıtlı gününü getirme
   static Future<int> getCurrentDay() async {
     final doc = _userDoc();
-    if (doc == null) return 1;
-    final snap = await doc.get();
-    return (snap.data()?['current_day'] as num?)?.toInt() ?? 1;
+    if (doc == null) return _cachedDay;
+    try {
+      final snap = await doc.get();
+      final dbDay = (snap.data()?['current_day'] ?? snap.data()?['currentDay'] as num?)?.toInt();
+      if (dbDay != null && dbDay > _cachedDay) {
+        _cachedDay = dbDay;
+      }
+    } catch (e) {
+      debugPrint('getCurrentDay error: $e');
+    }
+    return _cachedDay;
   }
 
   /// Aktif günü veritabanında güncelleme
   static Future<void> setCurrentDay(int day) async {
     final safeDay = math.max(1, day);
+    _cachedDay = safeDay;
     final doc = _userDoc();
-    if (doc == null) return;
-    await doc.set({'current_day': safeDay}, SetOptions(merge: true));
+    if (doc != null) {
+      try {
+        await doc.set({
+          'current_day': safeDay,
+          'currentDay': safeDay,
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('setCurrentDay error: $e');
+      }
+    }
     await _ensureWordsForDay(safeDay);
   }
 

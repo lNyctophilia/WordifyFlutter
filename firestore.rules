@@ -29,14 +29,12 @@ service cloud.firestore {
         request.resource.data.roles.size() == 1 &&
         request.resource.data.roles[0] == 'staff';
 
-      // Güncelleme: Admin herkesi, kullanıcı ise sadece kendi oturum ve profil bilgilerini güncelleyebilir
+      // Güncelleme: Admin herkesi, kullanıcı ise kendi profil ve öğrenme verilerini güncelleyebilir (roller ve onay hariç)
       allow update: if request.auth != null && (
         isAdmin() || 
         (
           request.auth.uid == userId && 
-          request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'lastLoginAt', 'displayName', 'photoURL', 'fcmToken', 'sessionId', 'last_word_index'
-          ])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles', 'isApproved'])
         )
       );
 
