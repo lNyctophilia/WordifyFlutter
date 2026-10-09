@@ -1,38 +1,44 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 import 'spaced_repetition_service.dart';
+import 'utils/sound_service.dart';
+import 'utils/tts_service.dart';
 
 enum QuestionType {
-  /// Aşama 1: Tanıma (Recognition) - 1. ve 2. Tekrarlar (Adım 0-1)
-  /// 4 şıklı çoktan seçmeli cloze testi
-  recognition,
+  /// 1. Cümle İçi Boşluk Doldurma (4 Şıklı Çoktan Seçmeli)
+  clozeChoice,
 
-  /// Aşama 2: Kısmi Üretme (Partial Production) - 3. ve 4. Tekrarlar (Adım 2-3)
-  /// Cümle boşluğu + ilk harf ve uzunluk ipucu ile klavye girişi
-  partial,
+  /// 2. Anlam Eşleştirme (Türkçe Anlam -> 4 İngilizce Seçenek)
+  meaningChoice,
 
-  /// Aşama 3: Tam Ustalık (Mastery) - 5. Tekrar ve sonrası (Adım 4+)
-  /// İpucu yok, sadece Türkçe anlam verilir, kelimenin tamamı yazılır
-  mastery,
+  /// 3. Kısmi Üretme (İlk Harf ve Uzunluk İpucu ile Klavyeden Yazma)
+  partialTyping,
+
+  /// 4. Tam Ustalık (İpuçsuz Doğrudan Çeviriyi Yazma)
+  masteryTyping,
 }
 
 class SessionQuestion {
   final QuestionType type;
+  final SpacedWord word;
   final String targetWord;
   final String translation;
   final String sentence;
   final String sentenceTr;
   final String hint;
   final List<String> options;
+  final int stageNumber; // 1, 2, 3, 4
 
   SessionQuestion({
     required this.type,
+    required this.word,
     required this.targetWord,
     required this.translation,
     this.sentence = '',
     this.sentenceTr = '',
     this.hint = '',
     this.options = const [],
+    required this.stageNumber,
   });
 }
 
@@ -49,10 +55,13 @@ class SessionPage extends StatefulWidget {
 }
 
 class _SessionPageState extends State<SessionPage> with SingleTickerProviderStateMixin {
-  List<SpacedWord> _words = [];
   List<SessionQuestion> _questions = [];
+  List<SpacedWord> _sessionWords = [];
   bool _isLoading = true;
+  bool _isSessionFinished = false;
   int _currentIndex = 0;
+  int _correctAnswers = 0;
+  int _totalAnswers = 0;
 
   bool _showFeedback = false;
   String? _falseFriendWarning;
@@ -67,6 +76,8 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
+    SoundService.init();
+    TtsService.init();
     _shakeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -77,11 +88,11 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
   Future<void> _loadSession() async {
     try {
       final words = await SpacedRepetitionService.getSessionForDay(widget.day);
-      final questions = words.map(_mapToQuestion).toList();
+      final questions = _generateAllStageQuestions(words);
 
       if (mounted) {
         setState(() {
-          _words = words;
+          _sessionWords = words;
           _questions = questions;
           _isLoading = false;
         });
@@ -99,15 +110,41 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
     }
   }
 
-  @override
-  void dispose() {
-    _textController.dispose();
-    _focusNode.dispose();
-    _shakeController.dispose();
-    super.dispose();
+  List<SessionQuestion> _generateAllStageQuestions(List<SpacedWord> words) {
+    if (words.isEmpty) return [];
+
+    final List<SessionQuestion> allQuestions = [];
+
+    // Kelimeleri 5'erli gruplar halinde işleyerek her kelime için 4 aşamayı ardışık pekiştir
+    const batchSize = 5;
+    for (int i = 0; i < words.length; i += batchSize) {
+      final batch = words.sublist(i, min(i + batchSize, words.length));
+
+      // 1. Aşama: Cümle içi boşluk doldurma (4 Şıklı)
+      for (final w in batch) {
+        allQuestions.add(_buildQuestion(w, QuestionType.clozeChoice, 1));
+      }
+
+      // 2. Aşama: Anlam Eşleştirme (4 Şıklı)
+      for (final w in batch) {
+        allQuestions.add(_buildQuestion(w, QuestionType.meaningChoice, 2));
+      }
+
+      // 3. Aşama: Kısmi Üretme (İlk harf ipuçlu yazma)
+      for (final w in batch) {
+        allQuestions.add(_buildQuestion(w, QuestionType.partialTyping, 3));
+      }
+
+      // 4. Aşama: Tam Ustalık (Doğrudan yazma)
+      for (final w in batch) {
+        allQuestions.add(_buildQuestion(w, QuestionType.masteryTyping, 4));
+      }
+    }
+
+    return allQuestions;
   }
 
-  SessionQuestion _mapToQuestion(SpacedWord w) {
+  SessionQuestion _buildQuestion(SpacedWord w, QuestionType type, int stage) {
     String sentence = w.exampleSentence ?? '';
     if (sentence.isEmpty) {
       sentence = '_____';
@@ -118,43 +155,36 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
       );
     }
 
-    if (w.step <= 1) {
-      // Aşama 1: Tanıma (Recognition) - 4 şıklı çoktan seçmeli
-      final distractors = SpacedRepetitionService.getRandomDistractors(w.wordEn, count: 3);
-      final options = [w.wordEn, ...distractors]..shuffle();
-
-      return SessionQuestion(
-        type: QuestionType.recognition,
-        targetWord: w.wordEn,
-        translation: w.wordTr,
-        sentence: sentence,
-        sentenceTr: w.exampleTr ?? '',
-        options: options,
-      );
-    } else if (w.step <= 3) {
-      // Aşama 2: Kısmi Üretme (Partial Production) - İlk harf + uzunluk ipucu
-      String hint = '';
-      if (w.wordEn.isNotEmpty) {
-        hint = w.wordEn[0] + List.generate(w.wordEn.length - 1, (_) => ' _').join('');
-      }
-
-      return SessionQuestion(
-        type: QuestionType.partial,
-        targetWord: w.wordEn,
-        translation: w.wordTr,
-        sentence: sentence,
-        sentenceTr: w.exampleTr ?? '',
-        hint: hint,
-      );
-    } else {
-      // Aşama 3: Tam Ustalık (Mastery) - İpuçsuz doğrudan çeviri
-      return SessionQuestion(
-        type: QuestionType.mastery,
-        targetWord: w.wordEn,
-        translation: w.wordTr,
-        sentenceTr: w.exampleTr ?? '',
-      );
+    String hint = '';
+    if (w.wordEn.isNotEmpty) {
+      hint = w.wordEn[0] + List.generate(w.wordEn.length - 1, (_) => ' _').join('');
     }
+
+    List<String> options = [];
+    if (type == QuestionType.clozeChoice || type == QuestionType.meaningChoice) {
+      final distractors = SpacedRepetitionService.getRandomDistractors(w.wordEn, count: 3);
+      options = [w.wordEn, ...distractors]..shuffle();
+    }
+
+    return SessionQuestion(
+      type: type,
+      word: w,
+      targetWord: w.wordEn,
+      translation: w.wordTr,
+      sentence: sentence,
+      sentenceTr: w.exampleTr ?? '',
+      hint: hint,
+      options: options,
+      stageNumber: stage,
+    );
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _focusNode.dispose();
+    _shakeController.dispose();
+    super.dispose();
   }
 
   void _checkAnswer(String rawAnswer) {
@@ -162,35 +192,43 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
     final answer = rawAnswer.trim();
     if (answer.isEmpty) return;
 
-    final currentWord = _words[_currentIndex];
     final currentQ = _questions[_currentIndex];
     final isCorrect = answer.toLowerCase() == currentQ.targetWord.toLowerCase();
+    _totalAnswers++;
 
-    // SRS ilerlemesini güncelle
-    SpacedRepetitionService.updateWordProgress(
-      currentWord.id,
-      isCorrect,
-      activeDay: widget.day,
-    );
+    // Sadece 4. aşamada veya doğru bilindiğinde SRS ilerlemesini güncelle
+    if (currentQ.stageNumber == 4 || isCorrect) {
+      SpacedRepetitionService.updateWordProgress(
+        currentQ.word.id,
+        isCorrect,
+        activeDay: widget.day,
+      );
+    }
 
     if (isCorrect) {
+      _correctAnswers++;
+      SoundService.playCorrect();
+      TtsService.speak(currentQ.targetWord);
       setState(() {
         _isCorrect = true;
         _selectedOption = answer;
       });
-      Future.delayed(const Duration(milliseconds: 700), () {
+      Future.delayed(const Duration(milliseconds: 650), () {
         _nextQuestion();
       });
     } else {
+      SoundService.playWrong();
       _shakeController.forward(from: 0.0);
 
       // Aşama 4: Akıllı Hata Geri Bildirimi (Smart Feedback)
-      // Kullanıcının yazdığı veya seçtiği yanlış kelimenin sözlük karşılığını bul
       String? falseFriend;
       final enteredMeaning = SpacedRepetitionService.getWordMeaning(answer);
       if (enteredMeaning != null && enteredMeaning.isNotEmpty) {
         falseFriend = "Senin yazdığın/seçtiğin '$answer' kelimesi '$enteredMeaning' anlamına gelir.";
       }
+
+      // Yanlış bilinen soruyu seansın sonuna tekrar ekle (Pekiştirilene kadar)
+      _questions.add(_buildQuestion(currentQ.word, currentQ.type, currentQ.stageNumber));
 
       setState(() {
         _isCorrect = false;
@@ -214,65 +252,300 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
         _textController.clear();
       });
 
-      if (_questions[_currentIndex].type != QuestionType.recognition) {
+      final nextType = _questions[_currentIndex].type;
+      if (nextType == QuestionType.partialTyping || nextType == QuestionType.masteryTyping) {
         Future.delayed(const Duration(milliseconds: 100), () {
           _focusNode.requestFocus();
         });
       }
     } else {
-      _showCompletionDialog();
+      setState(() {
+        _isSessionFinished = true;
+      });
+      SoundService.playFinish();
     }
   }
 
-  void _showCompletionDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: const Color(0xFF131D36),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.celebration_rounded, color: Colors.amber, size: 64),
-                const SizedBox(height: 24),
-                const Text(
-                  'Harika İş Çıkardın!',
-                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Bugünkü öğrenme ve tekrar görevlerini başarıyla tamamladın.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).pop();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3A86FF),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  void _restartSession() {
+    setState(() {
+      _isLoading = true;
+      _isSessionFinished = false;
+      _currentIndex = 0;
+      _correctAnswers = 0;
+      _totalAnswers = 0;
+      _showFeedback = false;
+      _isCorrect = false;
+      _selectedOption = null;
+      _falseFriendWarning = null;
+      _textController.clear();
+    });
+    _loadSession();
+  }
+
+  Widget _buildCompletionView() {
+    final accuracy = _totalAnswers > 0
+        ? ((_correctAnswers / _totalAnswers) * 100).round()
+        : 100;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A1128),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Gün ${widget.day} Tamamlandı!',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 580),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Column(
+                children: [
+                  Container(
+                    width: 90,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFB703).withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFFFB703).withValues(alpha: 0.4),
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFFB703).withValues(alpha: 0.25),
+                          blurRadius: 32,
+                          spreadRadius: 4,
+                        ),
+                      ],
                     ),
-                    child: const Text(
-                      'Ana Sayfaya Dön',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    child: const Icon(
+                      Icons.emoji_events_rounded,
+                      color: Color(0xFFFFB703),
+                      size: 50,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Harika İş Çıkardın!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Gün ${widget.day} kelimelerini 4 farklı quiz aşamasında başarıyla tamamladın.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // İstatistik Kartları
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          icon: Icons.quiz_outlined,
+                          title: 'Toplam Soru',
+                          value: '${_questions.length}',
+                          color: const Color(0xFF3A86FF),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildStatCard(
+                          icon: Icons.speed_rounded,
+                          title: 'Başarı Oranı',
+                          value: '%$accuracy',
+                          color: const Color(0xFF00E676),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildStatCard(
+                          icon: Icons.auto_stories_rounded,
+                          title: 'Kelimeler',
+                          value: '${_sessionWords.length}',
+                          color: const Color(0xFFFFB703),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Günün Kelimeleri ve Telaffuz Listesi
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.volume_up_rounded, color: Color(0xFF3A86FF), size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Günün Kelimeleri & Telaffuzları',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._sessionWords.map((word) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF131D36),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF1E2D4A)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      word.wordEn,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      word.wordTr,
+                                      style: const TextStyle(
+                                        color: Color(0xFF00B4D8),
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (word.exampleSentence != null && word.exampleSentence!.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    word.exampleSentence!,
+                                    style: const TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 13,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.volume_up_rounded, color: Color(0xFF3A86FF)),
+                            tooltip: 'Telaffuzu Dinle',
+                            onPressed: () => TtsService.speak(word.wordEn),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 24),
+
+                  // Aksiyon Butonları
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3A86FF),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Ana Sayfaya Dön',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: _restartSession,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        side: const BorderSide(color: Color(0xFF1E2D4A)),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Bu Günü Tekrar Et',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131D36),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF1E2D4A)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 
@@ -283,6 +556,10 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
         backgroundColor: Color(0xFF0A1128),
         body: Center(child: CircularProgressIndicator(color: Color(0xFF3A86FF))),
       );
+    }
+
+    if (_isSessionFinished) {
+      return _buildCompletionView();
     }
 
     if (_questions.isEmpty) {
@@ -298,7 +575,7 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
         ),
         body: const Center(
           child: Text(
-            'Bugünlük çalışılacak kelime yok!\nYarın tekrar gel.',
+            'Bu gün için çalışılacak kelime bulunamadı.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white, fontSize: 20, height: 1.5),
           ),
@@ -327,6 +604,17 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
             minHeight: 6,
           ),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Center(
+              child: Text(
+                '${_currentIndex + 1}/${_questions.length}',
+                style: const TextStyle(color: Colors.white54, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Stack(
@@ -369,7 +657,7 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
               ],
             ),
 
-            // Aşama 4: Akıllı Hata Geri Bildirimi Alt Kartı
+            // Akıllı Hata Geri Bildirimi Alt Kartı
             if (_showFeedback)
               Positioned(
                 bottom: 0,
@@ -395,32 +683,37 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
   }
 
   Widget _buildCard(SessionQuestion q, {required Key key}) {
-    String typeBadgeTitle;
-    IconData typeBadgeIcon;
-    Color typeBadgeColor;
+    String badgeTitle;
+    IconData badgeIcon;
+    Color badgeColor;
 
     switch (q.type) {
-      case QuestionType.recognition:
-        typeBadgeTitle = 'Aşama 1: Tanıma (Çoktan Seçmeli)';
-        typeBadgeIcon = Icons.visibility_rounded;
-        typeBadgeColor = const Color(0xFF00B4D8);
+      case QuestionType.clozeChoice:
+        badgeTitle = 'Aşama 1: Cümle İçi Boşluk Doldurma (4 Şıklı)';
+        badgeIcon = Icons.visibility_rounded;
+        badgeColor = const Color(0xFF00B4D8);
         break;
-      case QuestionType.partial:
-        typeBadgeTitle = 'Aşama 2: Kısmi Üretme (İpuçlu Yazma)';
-        typeBadgeIcon = Icons.edit_note_rounded;
-        typeBadgeColor = const Color(0xFF3A86FF);
+      case QuestionType.meaningChoice:
+        badgeTitle = 'Aşama 2: Anlam Eşleştirme (4 Şıklı)';
+        badgeIcon = Icons.tune_rounded;
+        badgeColor = const Color(0xFF7209B7);
         break;
-      case QuestionType.mastery:
-        typeBadgeTitle = 'Aşama 3: Tam Ustalık (Doğrudan Yazma)';
-        typeBadgeIcon = Icons.workspace_premium_rounded;
-        typeBadgeColor = const Color(0xFFFFB703);
+      case QuestionType.partialTyping:
+        badgeTitle = 'Aşama 3: Kısmi Üretme (İpuçlu Yazma)';
+        badgeIcon = Icons.edit_note_rounded;
+        badgeColor = const Color(0xFF3A86FF);
+        break;
+      case QuestionType.masteryTyping:
+        badgeTitle = 'Aşama 4: Tam Ustalık (Doğrudan Yazma)';
+        badgeIcon = Icons.workspace_premium_rounded;
+        badgeColor = const Color(0xFFFFB703);
         break;
     }
 
     return Container(
       key: key,
       width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 500),
+      constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: _isCorrect
@@ -446,23 +739,69 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Aşama Etiketi
+          // Aşama İlerleme Göstergesi (1-2-3-4)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(4, (index) {
+              final step = index + 1;
+              final isPassed = step < q.stageNumber;
+              final isCurrent = step == q.stageNumber;
+
+              return Row(
+                children: [
+                  Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isPassed
+                          ? const Color(0xFF00E676)
+                          : isCurrent
+                              ? badgeColor
+                              : const Color(0xFF1E2D4A),
+                    ),
+                    child: Center(
+                      child: isPassed
+                          ? const Icon(Icons.check, size: 16, color: Colors.black)
+                          : Text(
+                              '$step',
+                              style: TextStyle(
+                                color: isCurrent ? Colors.white : Colors.white54,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                  if (step < 4)
+                    Container(
+                      width: 20,
+                      height: 3,
+                      color: isPassed ? const Color(0xFF00E676) : const Color(0xFF1E2D4A),
+                    ),
+                ],
+              );
+            }),
+          ),
+          const SizedBox(height: 18),
+
+          // Soru Tipi Başlığı
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: typeBadgeColor.withValues(alpha: 0.15),
+              color: badgeColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: typeBadgeColor.withValues(alpha: 0.3)),
+              border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(typeBadgeIcon, size: 16, color: typeBadgeColor),
+                Icon(badgeIcon, size: 16, color: badgeColor),
                 const SizedBox(width: 6),
                 Text(
-                  typeBadgeTitle,
+                  badgeTitle,
                   style: TextStyle(
-                    color: typeBadgeColor,
+                    color: badgeColor,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
@@ -470,7 +809,7 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
 
           // Türkçe Anlam
           Text(
@@ -483,36 +822,58 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
             ),
           ),
 
-          if (q.sentenceTr.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              q.sentenceTr,
+          if (q.type == QuestionType.meaningChoice) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Doğru İngilizce karşılığını seçin:',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white54,
-                fontSize: 15,
-                fontStyle: FontStyle.italic,
-              ),
+              style: TextStyle(color: Colors.white54, fontSize: 14),
             ),
           ],
 
-          if (q.type == QuestionType.recognition || q.type == QuestionType.partial) ...[
-            if (q.sentence.isNotEmpty) ...[
-              const SizedBox(height: 16),
+          if (q.type == QuestionType.clozeChoice || q.type == QuestionType.partialTyping) ...[
+            if (q.sentenceTr.isNotEmpty) ...[
+              const SizedBox(height: 10),
               Text(
-                q.sentence,
+                q.sentenceTr,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 21,
-                  fontWeight: FontWeight.w500,
-                  height: 1.4,
+                  color: Colors.white54,
+                  fontSize: 15,
+                  fontStyle: FontStyle.italic,
                 ),
+              ),
+            ],
+            if (q.sentence.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      q.sentence,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.volume_up_rounded, color: Color(0xFF3A86FF)),
+                    tooltip: 'Cümleyi Dinle',
+                    onPressed: () => TtsService.speak(
+                      q.sentence.replaceAll('_____', q.targetWord),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
 
-          if (q.type == QuestionType.partial && q.hint.isNotEmpty) ...[
+          if (q.type == QuestionType.partialTyping && q.hint.isNotEmpty) ...[
             const SizedBox(height: 20),
             Text(
               q.hint,
@@ -525,11 +886,20 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
             ),
           ],
 
+          if (q.type == QuestionType.masteryTyping) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Kelimenin İngilizce yazılışını hatasız girin:',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white54, fontSize: 14),
+            ),
+          ],
+
           const SizedBox(height: 36),
 
-          // Soru Tipine Göre Giriş / Şık Alanı
-          if (q.type == QuestionType.recognition)
-            _buildRecognitionOptions(q)
+          // Soru Tipine Göre Şıklar veya Yazı Alanı
+          if (q.type == QuestionType.clozeChoice || q.type == QuestionType.meaningChoice)
+            _buildOptionsList(q)
           else
             _buildInputField(),
         ],
@@ -537,7 +907,7 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildRecognitionOptions(SessionQuestion q) {
+  Widget _buildOptionsList(SessionQuestion q) {
     return Column(
       children: q.options.map((option) {
         final isSelected = _selectedOption?.toLowerCase() == option.toLowerCase();
@@ -683,23 +1053,34 @@ class _SessionPageState extends State<SessionPage> with SingleTickerProviderStat
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            const TextSpan(
-                              text: 'Doğrusu: ',
-                              style: TextStyle(color: Colors.white70, fontSize: 18),
-                            ),
-                            TextSpan(
-                              text: q.targetWord,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text.rich(
+                              TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'Doğrusu: ',
+                                    style: TextStyle(color: Colors.white70, fontSize: 18),
+                                  ),
+                                  TextSpan(
+                                    text: q.targetWord,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.volume_up_rounded, color: Colors.white70),
+                            tooltip: 'Telaffuzu Dinle',
+                            onPressed: () => TtsService.speak(q.targetWord),
+                          ),
+                        ],
                       ),
                     ],
                   ),

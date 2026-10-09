@@ -2,7 +2,7 @@
 {{flutter_build_config}}
 
 try {
-  const BUILD_VERSION = '09.10.2026-07.55';
+  const BUILD_VERSION = '09.10.2026-08.31';
   const urlParams = new URLSearchParams(window.location.search);
   const v = urlParams.get('t') || BUILD_VERSION;
   if (window._flutter && window._flutter.buildConfig && window._flutter.buildConfig.builds) {

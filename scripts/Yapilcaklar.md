@@ -2,10 +2,10 @@
 
 \*\*
 
-uygulamanın normal halindeki ss'leri al her durumdan, bu durumları fotoğraflarla ilişkilendirerek uygulamayı claude'a implementation plan oluşturt
+kelimelerin ingilizcesini sesli şekilde tts ile söyletelim telafuzunu
 
-WP-Sayim uygulamasından renk paletini al, wordify için kullan
+Bitiş ekranı popup şeklinde değilde bi güzel ui tasarlayalım sayfa olarak işte şu günü bitirdin! gibi gibi.
 
-"en_tr_word_list.txt" dosyasında ingilizce kelimeler ve türkçe karşılıkları , ingilizce ve türkçe örnek cümleleri var. Biz bu kelimeleri bu uygulamada şu yöntemle öğretmeye çalışıcaz : bi kutucuk içerisinde bu
+Kelimeleri doğru bildikçe bi doğru sesi yanlış yapınca yanlış sesi ve bitişte bi bitiş sesi yapalım
 
 \*\*
