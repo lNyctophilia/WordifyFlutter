@@ -218,16 +218,26 @@ class SettingsPage extends StatelessWidget {
                 _buildSettingsCard(
                   icon: Icons.delete_forever_rounded,
                   iconColor: Colors.redAccent,
-                  title: 'İlerlemeyi Sıfırla',
+                  title: 'Verileri ve İlerlemeyi Sıfırla',
                   subtitle: 'Tüm öğrenilmiş kelimeleri ve aşamaları siler',
                   onTap: () async {
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
                         backgroundColor: const Color(0xFF131D36),
-                        title: const Text('Emin misiniz?', style: TextStyle(color: Colors.white)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                        ),
+                        title: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+                            SizedBox(width: 8),
+                            Text('Verileri Sıfırla', style: TextStyle(color: Colors.white)),
+                          ],
+                        ),
                         content: const Text(
-                          'Tüm kelime ilerlemeniz kalıcı olarak silinecek ve en baştan başlayacaksınız.',
+                          'Tüm kelime ilerlemeniz ve öğrenme verileriniz kalıcı olarak silinecek, 1. günden en baştan başlayacaksınız.\n\nEmin misiniz?',
                           style: TextStyle(color: Colors.white70),
                         ),
                         actions: [
@@ -237,21 +247,58 @@ class SettingsPage extends StatelessWidget {
                           ),
                           TextButton(
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Sıfırla', style: TextStyle(color: Colors.redAccent)),
+                            child: const Text('Evet, Sıfırla', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
                     );
 
-                    if (confirm == true) {
-                      await SpacedRepetitionService.resetUserData();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Tüm ilerleme sıfırlandı.'),
-                            backgroundColor: Colors.redAccent,
+                    if (confirm == true && context.mounted) {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => const PopScope(
+                          canPop: false,
+                          child: Center(
+                            child: Card(
+                              color: Color(0xFF131D36),
+                              child: Padding(
+                                padding: EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircularProgressIndicator(color: Colors.redAccent),
+                                    SizedBox(height: 16),
+                                    Text('Veriler sıfırlanıyor...', style: TextStyle(color: Colors.white)),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                        );
+                        ),
+                      );
+
+                      try {
+                        await SpacedRepetitionService.resetUserData();
+                        if (context.mounted) {
+                          Navigator.of(context, rootNavigator: true).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Tüm veriler ve ilerleme başarıyla sıfırlandı.'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          Navigator.of(context, rootNavigator: true).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Sıfırlama sırasında bir hata oluştu: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       }
                     }
                   },

@@ -2,10 +2,4 @@
 
 \*\*
 
-kelimelerin ingilizcesini sesli şekilde tts ile söyletelim telafuzunu
-
-Bitiş ekranı popup şeklinde değilde bi güzel ui tasarlayalım sayfa olarak işte şu günü bitirdin! gibi gibi.
-
-Kelimeleri doğru bildikçe bi doğru sesi yanlış yapınca yanlış sesi ve bitişte bi bitiş sesi
-
 \*\*

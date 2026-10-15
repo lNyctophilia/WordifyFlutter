@@ -150,11 +150,17 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     });
   }
 
-  void _openSettings(BuildContext context) {
-    Navigator.push(
+  Future<void> _openSettings(BuildContext context) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const SettingsPage()),
     );
+    if (mounted) {
+      final currentDay = await SpacedRepetitionService.getCurrentDay();
+      setState(() {
+        _selectedDay = currentDay;
+      });
+    }
   }
 
   void _startSession(int day, SessionPart part) {
@@ -166,6 +172,64 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     );
   }
 
+  Future<void> _showRestartConfirmationDialog(BuildContext context, int day) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF131D36),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.refresh_rounded, color: Color(0xFF00E676)),
+            SizedBox(width: 10),
+            Text(
+              'Eğitimi Baştan Başlat',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Eğitimi bitirdiniz. Baştan başlansın mı?\n\nEvet derseniz bugünün verileri silinip en baştan başlanacaktır.',
+          style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hayır', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3A86FF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Evet',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await SpacedRepetitionService.resetDayProgress(day);
+      if (mounted) {
+        _startSession(day, SessionPart.introduction);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Map<String, dynamic>>(
@@ -173,7 +237,9 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
       builder: (context, profileSnapshot) {
         final profile = profileSnapshot.data ?? {};
         final dbDay = (profile['current_day'] as num?)?.toInt() ?? 1;
-        _selectedDay ??= dbDay;
+        if (_selectedDay == null || _selectedDay! > dbDay) {
+          _selectedDay = dbDay;
+        }
         final activeDay = _selectedDay!;
         final streak = (profile['streak'] as num?)?.toInt() ?? 0;
         final rawActivity = profile['weekly_activity'];
@@ -429,9 +495,14 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                               ),
                                       ),
                                       child: ElevatedButton(
-                                        onPressed: allDone
-                                            ? null
-                                            : () => _startSession(activeDay, nextPart),
+                                        onPressed: () {
+                                          if (allDone) {
+                                            _showRestartConfirmationDialog(
+                                                context, activeDay);
+                                          } else {
+                                            _startSession(activeDay, nextPart);
+                                          }
+                                        },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.transparent,
                                           disabledBackgroundColor: Colors.transparent,
@@ -447,7 +518,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                           children: [
                                             Text(
                                               allDone
-                                                  ? '✅ Gün Tamamlandı'
+                                                  ? '✅ Eğitimi Tekrarla'
                                                   : nextPartIdx == 0
                                                       ? 'Eğitime Başla'
                                                       : 'Devam Et',
@@ -458,12 +529,13 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                                 letterSpacing: 0.4,
                                               ),
                                             ),
-                                            if (!allDone) ...[
-                                              const SizedBox(width: 10),
-                                              const Icon(
-                                                  Icons.arrow_forward_rounded,
-                                                  color: Colors.white),
-                                            ],
+                                            const SizedBox(width: 10),
+                                            Icon(
+                                              allDone
+                                                  ? Icons.refresh_rounded
+                                                  : Icons.arrow_forward_rounded,
+                                              color: Colors.white,
+                                            ),
                                           ],
                                         ),
                                       ),

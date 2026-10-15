@@ -92,18 +92,56 @@ class DayPartProgress {
   });
 
   factory DayPartProgress.fromMap(Map<String, dynamic> data) {
-    final int inferredPart = data['part2_completed'] == true
-        ? (data['part3_completed'] == true ? 4 : 3)
-        : (data['part1_completed'] == true ? 2 : 1);
+    final int curPart = (data['current_part'] ?? data['currentPart'] as num?)?.toInt() ?? 1;
+    final bool p1 = data['part1_completed'] == true ||
+        data['part1Completed'] == true ||
+        curPart >= 2;
+    final bool p2 = data['part2_completed'] == true ||
+        data['part2Completed'] == true ||
+        curPart >= 3;
+    final bool p3 = data['part3_completed'] == true ||
+        data['part3Completed'] == true ||
+        curPart >= 4;
+    final bool bNeeded =
+        data['bonus_needed'] == true || data['bonusNeeded'] == true;
+    final bool bDone =
+        data['bonus_completed'] == true || data['bonusCompleted'] == true;
+
+    final int inferredPart = p2 ? (p3 ? 4 : 3) : (p1 ? 2 : 1);
+
     return DayPartProgress(
-      part1Completed: data['part1_completed'] ?? false,
-      part2Completed: data['part2_completed'] ?? false,
-      part3Completed: data['part3_completed'] ?? false,
-      bonusNeeded: data['bonus_needed'] ?? false,
-      bonusCompleted: data['bonus_completed'] ?? false,
-      wrongWordsInSession: List<String>.from(data['wrong_words_in_session'] ?? []),
-      currentPart: (data['current_part'] ?? data['currentPart'] as num?)?.toInt() ?? inferredPart,
-      reviewCount: (data['review_count'] as num?)?.toInt() ?? 0,
+      part1Completed: p1,
+      part2Completed: p2,
+      part3Completed: p3,
+      bonusNeeded: bNeeded,
+      bonusCompleted: bDone,
+      wrongWordsInSession: List<String>.from(
+          data['wrong_words_in_session'] ?? data['wrongWordsInSession'] ?? []),
+      currentPart: curPart > 1 ? curPart : inferredPart,
+      reviewCount:
+          (data['review_count'] ?? data['reviewCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  DayPartProgress copyWith({
+    bool? part1Completed,
+    bool? part2Completed,
+    bool? part3Completed,
+    bool? bonusNeeded,
+    bool? bonusCompleted,
+    List<String>? wrongWordsInSession,
+    int? currentPart,
+    int? reviewCount,
+  }) {
+    return DayPartProgress(
+      part1Completed: part1Completed ?? this.part1Completed,
+      part2Completed: part2Completed ?? this.part2Completed,
+      part3Completed: part3Completed ?? this.part3Completed,
+      bonusNeeded: bonusNeeded ?? this.bonusNeeded,
+      bonusCompleted: bonusCompleted ?? this.bonusCompleted,
+      wrongWordsInSession: wrongWordsInSession ?? this.wrongWordsInSession,
+      currentPart: currentPart ?? this.currentPart,
+      reviewCount: reviewCount ?? this.reviewCount,
     );
   }
 
@@ -168,6 +206,7 @@ class SpacedRepetitionService {
   }
 
   static int _cachedDay = 1;
+  static final Map<int, DayPartProgress> _dayProgressCache = {};
 
   // ─── SRS Interval Tablosu ────────────────────────────────────────────────
   /// Step → gün aralığı (daha uzun, daha kalıcı hafıza için).
@@ -263,7 +302,7 @@ class SpacedRepetitionService {
 
       final dbDay =
           (data['current_day'] ?? data['currentDay'] as num?)?.toInt();
-      if (dbDay != null && dbDay > _cachedDay) _cachedDay = dbDay;
+      if (dbDay != null) _cachedDay = dbDay;
 
       final currentPart =
           (data['current_part'] ?? data['currentPart'] as num?)?.toInt() ?? 1;
@@ -339,7 +378,7 @@ class SpacedRepetitionService {
       final dbDay = (snapshot.data()?['current_day'] ??
               snapshot.data()?['currentDay'] as num?)
           ?.toInt();
-      if (dbDay != null && dbDay > _cachedDay) _cachedDay = dbDay;
+      if (dbDay != null) _cachedDay = dbDay;
       return {'current_day': _cachedDay};
     });
   }
@@ -356,7 +395,7 @@ class SpacedRepetitionService {
       final dbDay = (snap.data()?['current_day'] ??
               snap.data()?['currentDay'] as num?)
           ?.toInt();
-      if (dbDay != null && dbDay > _cachedDay) _cachedDay = dbDay;
+      if (dbDay != null) _cachedDay = dbDay;
     } catch (e) {
       debugPrint('getCurrentDay error: $e');
     }
@@ -460,24 +499,108 @@ class SpacedRepetitionService {
   // ─── Part Yönetimi ─────────────────────────────────────────────────────────
 
   static Future<DayPartProgress> getDayPartProgress(int day) async {
-    final col = _dayProgressCollection();
-    if (col == null) return const DayPartProgress();
-    try {
-      final snap = await col.doc('day_$day').get();
-      if (!snap.exists || snap.data() == null) return const DayPartProgress();
-      return DayPartProgress.fromMap(snap.data()!);
-    } catch (e) {
-      debugPrint('getDayPartProgress error: $e');
-      return const DayPartProgress();
+    if (_dayProgressCache.containsKey(day)) {
+      return _dayProgressCache[day]!;
     }
+    final userDocRef = _userDoc();
+    if (userDocRef != null) {
+      try {
+        final snap = await userDocRef.get();
+        if (snap.exists && snap.data() != null) {
+          final data = snap.data()!;
+          Map<String, dynamic>? dayMap;
+          final daysProgress = data['days_progress'];
+          if (daysProgress is Map && daysProgress['day_$day'] is Map) {
+            dayMap = Map<String, dynamic>.from(daysProgress['day_$day']);
+          }
+          dayMap ??= (data['day_${day}_progress'] is Map)
+              ? Map<String, dynamic>.from(data['day_${day}_progress'])
+              : null;
+
+          final curDay = (data['current_day'] ?? data['currentDay'] as num?)?.toInt() ?? 1;
+          if (dayMap == null && day == curDay) {
+            final curPart = (data['current_part'] ?? data['currentPart'] as num?)?.toInt();
+            if (curPart != null) {
+              dayMap = {
+                'current_part': curPart,
+                'part1_completed': curPart >= 2,
+                'part2_completed': curPart >= 3,
+                'part3_completed': curPart >= 4,
+              };
+            }
+          }
+
+          if (dayMap != null) {
+            final res = DayPartProgress.fromMap(dayMap);
+            _dayProgressCache[day] = res;
+            return res;
+          }
+        }
+      } catch (e) {
+        debugPrint('userDoc getDayPartProgress error: $e');
+      }
+    }
+
+    final col = _dayProgressCollection();
+    if (col != null) {
+      try {
+        final snap = await col.doc('day_$day').get();
+        if (snap.exists && snap.data() != null) {
+          final res = DayPartProgress.fromMap(snap.data()!);
+          _dayProgressCache[day] = res;
+          return res;
+        }
+      } catch (e) {
+        debugPrint('col getDayPartProgress error: $e');
+      }
+    }
+
+    return const DayPartProgress();
   }
 
   static Stream<DayPartProgress> getDayPartProgressStream(int day) {
-    final col = _dayProgressCollection();
-    if (col == null) return Stream.value(const DayPartProgress());
-    return col.doc('day_$day').snapshots().map((snap) {
-      if (!snap.exists || snap.data() == null) return const DayPartProgress();
-      return DayPartProgress.fromMap(snap.data()!);
+    final userDocRef = _userDoc();
+    if (userDocRef == null) {
+      return Stream.value(_dayProgressCache[day] ?? const DayPartProgress());
+    }
+
+    return userDocRef.snapshots().map((snap) {
+      if (!snap.exists || snap.data() == null) {
+        return _dayProgressCache[day] ?? const DayPartProgress();
+      }
+      final data = snap.data()!;
+      Map<String, dynamic>? dayMap;
+      final daysProgress = data['days_progress'];
+      if (daysProgress is Map && daysProgress['day_$day'] is Map) {
+        dayMap = Map<String, dynamic>.from(daysProgress['day_$day']);
+      }
+      dayMap ??= (data['day_${day}_progress'] is Map)
+          ? Map<String, dynamic>.from(data['day_${day}_progress'])
+          : null;
+
+      final curDay = (data['current_day'] ?? data['currentDay'] as num?)?.toInt() ?? 1;
+      if (dayMap == null && day == curDay) {
+        final curPart = (data['current_part'] ?? data['currentPart'] as num?)?.toInt();
+        if (curPart != null) {
+          dayMap = {
+            'current_part': curPart,
+            'part1_completed': curPart >= 2,
+            'part2_completed': curPart >= 3,
+            'part3_completed': curPart >= 4,
+          };
+        }
+      }
+
+      if (dayMap != null) {
+        final res = DayPartProgress.fromMap(dayMap);
+        _dayProgressCache[day] = res;
+        return res;
+      }
+
+      return _dayProgressCache[day] ?? const DayPartProgress();
+    }).handleError((error) {
+      debugPrint('getDayPartProgressStream error: $error');
+      return _dayProgressCache[day] ?? const DayPartProgress();
     });
   }
 
@@ -496,11 +619,16 @@ class SpacedRepetitionService {
 
   static Future<void> setCurrentPart(int day, SessionPart part) async {
     final partNum = sessionPartToNumber(part);
-    final userDocRef = _userDoc();
-    final col = _dayProgressCollection();
+    _cachedDay = day;
 
-    try {
-      if (userDocRef != null) {
+    final existing = _dayProgressCache[day];
+    if (existing != null) {
+      _dayProgressCache[day] = existing.copyWith(currentPart: partNum);
+    }
+
+    final userDocRef = _userDoc();
+    if (userDocRef != null) {
+      try {
         await userDocRef.set({
           'current_day': day,
           'currentDay': day,
@@ -509,18 +637,21 @@ class SpacedRepetitionService {
           'current_part_name': part.name,
           'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('setCurrentPart userDoc error: $e');
       }
+    }
 
-      if (col != null) {
+    final col = _dayProgressCollection();
+    if (col != null) {
+      try {
         await col.doc('day_$day').set({
           'current_part': partNum,
           'currentPart': partNum,
           'current_part_name': part.name,
           'updated_at': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-      }
-    } catch (e) {
-      debugPrint('setCurrentPart error: $e');
+      } catch (_) {}
     }
   }
 
@@ -529,9 +660,6 @@ class SpacedRepetitionService {
     SessionPart part, {
     int? reviewCount,
   }) async {
-    final col = _dayProgressCollection();
-    if (col == null) return;
-
     final Map<String, dynamic> update = {};
     int nextPartNum = 1;
     switch (part) {
@@ -560,36 +688,165 @@ class SpacedRepetitionService {
     update['currentPart'] = nextPartNum;
     update['updated_at'] = FieldValue.serverTimestamp();
 
-    try {
-      await col.doc('day_$day').set(update, SetOptions(merge: true));
-      final userDocRef = _userDoc();
-      if (userDocRef != null) {
+    // 1. Önce in-memory cache'i hemen güncelle
+    final existing = _dayProgressCache[day] ?? const DayPartProgress();
+    _dayProgressCache[day] = existing.copyWith(
+      part1Completed:
+          part == SessionPart.introduction ? true : existing.part1Completed,
+      part2Completed:
+          part == SessionPart.deepening ? true : existing.part2Completed,
+      part3Completed:
+          part == SessionPart.review ? true : existing.part3Completed,
+      bonusCompleted:
+          part == SessionPart.bonus ? true : existing.bonusCompleted,
+      currentPart: nextPartNum,
+      reviewCount: reviewCount ?? existing.reviewCount,
+    );
+
+    // 2. userDoc'a kaydet (güvenli ve yetkisi kesin olan doküman)
+    final userDocRef = _userDoc();
+    if (userDocRef != null) {
+      try {
         await userDocRef.set({
           'current_day': day,
           'currentDay': day,
           'current_part': nextPartNum,
           'currentPart': nextPartNum,
+          'days_progress': {
+            'day_$day': update,
+          },
+          'day_${day}_progress': update,
           'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('userDoc markPartCompleted error: $e');
       }
-    } catch (e) {
-      debugPrint('markPartCompleted error: $e');
+    }
+
+    // 3. Subcollection'a da kaydetmeyi dene
+    final col = _dayProgressCollection();
+    if (col != null) {
+      try {
+        await col.doc('day_$day').set(update, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('col markPartCompleted error: $e');
+      }
     }
   }
 
   static Future<void> updateWrongWordsInSession(
       int day, List<String> wrongWords) async {
-    final col = _dayProgressCollection();
-    if (col == null) return;
-
     final bonusNeeded = wrongWords.length >= 2;
-    try {
-      await col.doc('day_$day').set({
-        'wrong_words_in_session': wrongWords,
-        'bonus_needed': bonusNeeded,
-      }, SetOptions(merge: true));
-    } catch (e) {
-      debugPrint('updateWrongWordsInSession error: $e');
+    final existing = _dayProgressCache[day] ?? const DayPartProgress();
+    _dayProgressCache[day] = existing.copyWith(
+      wrongWordsInSession: wrongWords,
+      bonusNeeded: bonusNeeded,
+    );
+
+    final payload = {
+      'wrong_words_in_session': wrongWords,
+      'bonus_needed': bonusNeeded,
+    };
+
+    final userDocRef = _userDoc();
+    if (userDocRef != null) {
+      try {
+        await userDocRef.set({
+          'days_progress': {
+            'day_$day': payload,
+          },
+          'day_${day}_progress': payload,
+        }, SetOptions(merge: true));
+      } catch (_) {}
+    }
+
+    final col = _dayProgressCollection();
+    if (col != null) {
+      try {
+        await col.doc('day_$day').set(payload, SetOptions(merge: true));
+      } catch (_) {}
+    }
+  }
+
+  /// Belirtilen günün tüm verilerini sıfırlar (tekrar baştan başlatma için).
+  static Future<void> resetDayProgress(int day) async {
+    _dayProgressCache[day] = const DayPartProgress();
+
+    final resetUpdate = {
+      'part1_completed': false,
+      'part2_completed': false,
+      'part3_completed': false,
+      'bonus_needed': false,
+      'bonus_completed': false,
+      'wrong_words_in_session': <String>[],
+      'current_part': 1,
+      'currentPart': 1,
+      'review_count': 0,
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+
+    // 1. userDoc'u sıfırla
+    final userDocRef = _userDoc();
+    if (userDocRef != null) {
+      try {
+        await userDocRef.set({
+          'current_day': day,
+          'currentDay': day,
+          'current_part': 1,
+          'currentPart': 1,
+          'days_progress': {
+            'day_$day': resetUpdate,
+          },
+          'day_${day}_progress': resetUpdate,
+          'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('userDoc resetDayProgress error: $e');
+      }
+    }
+
+    // 2. Subcollection'ı sıfırla
+    final col = _dayProgressCollection();
+    if (col != null) {
+      try {
+        await col.doc('day_$day').set(resetUpdate);
+      } catch (_) {}
+    }
+
+    // 3. Günün kelimelerini sıfırla
+    final wordsCol = _userWordsCollection();
+    if (wordsCol != null) {
+      try {
+        final assignedSnap =
+            await wordsCol.where('assigned_day', isEqualTo: day).get();
+        final batch = _firestore.batch();
+        for (var doc in assignedSnap.docs) {
+          batch.update(doc.reference, {
+            'step': 0,
+            'due_day': day,
+            'is_learning': true,
+            'wrong_count': 0,
+            'mastered': false,
+            'next_review_date': Timestamp.fromDate(DateTime.now()),
+          });
+        }
+
+        final reviewSnap =
+            await wordsCol.where('last_reviewed_day', isEqualTo: day).get();
+        for (var doc in reviewSnap.docs) {
+          if (doc.data()['assigned_day'] != day) {
+            batch.update(doc.reference, {
+              'due_day': day,
+              'next_review_date': Timestamp.fromDate(DateTime.now()),
+              'last_reviewed_day': FieldValue.delete(),
+            });
+          }
+        }
+
+        await batch.commit();
+      } catch (e) {
+        debugPrint('words resetDayProgress error: $e');
+      }
     }
   }
 
@@ -716,6 +973,7 @@ class SpacedRepetitionService {
         'is_learning': step <= 1,
         'wrong_count': wrongCount,
         'mastered': mastered,
+        'last_reviewed_day': day,
       });
     });
 
@@ -774,23 +1032,51 @@ class SpacedRepetitionService {
     final wordSnap = await wordsCol.get();
     final progressSnap = await progressCol.get();
 
-    final batch = _firestore.batch();
-    for (var doc in wordSnap.docs) {
-      batch.delete(doc.reference);
-    }
-    for (var doc in progressSnap.docs) {
-      batch.delete(doc.reference);
+    final List<DocumentReference> refsToDelete = [
+      ...wordSnap.docs.map((d) => d.reference),
+      ...progressSnap.docs.map((d) => d.reference),
+    ];
+
+    const int chunkSize = 400;
+    for (int i = 0; i < refsToDelete.length; i += chunkSize) {
+      final chunk = refsToDelete.sublist(
+        i,
+        math.min(i + chunkSize, refsToDelete.length),
+      );
+      final batch = _firestore.batch();
+      for (final ref in chunk) {
+        batch.delete(ref);
+      }
+      await batch.commit();
     }
 
-    batch.set(userDoc, {
+    _cachedDay = 1;
+    _dayProgressCache.clear();
+
+    final userSnap = await userDoc.get();
+    final Map<String, dynamic> resetPayload = {
       'last_word_index': 0,
       'current_day': 1,
       'currentDay': 1,
       'current_part': 1,
       'currentPart': 1,
-    }, SetOptions(merge: true));
+      'current_part_name': 'introduction',
+      'days_progress': {},
+      'streak': 0,
+      'weekly_activity': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      'last_study_date': null,
+      'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
+    };
 
-    await batch.commit();
+    if (userSnap.exists && userSnap.data() != null) {
+      for (final key in userSnap.data()!.keys) {
+        if (key.startsWith('day_') && key.endsWith('_progress')) {
+          resetPayload[key] = FieldValue.delete();
+        }
+      }
+    }
+
+    await userDoc.set(resetPayload, SetOptions(merge: true));
     await _ensureWordsForDay(1);
   }
 }
