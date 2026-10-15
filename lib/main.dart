@@ -5,6 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'update_service.dart';
 import 'utils/pwa_check.dart';
+import 'utils/sound_service.dart';
+import 'utils/tts_service.dart';
 import 'install_prompt_page.dart';
 import 'login_page.dart';
 import 'settings_page.dart';
@@ -32,6 +34,10 @@ void main() async {
   } catch (e) {
     debugPrint('Firebase initialization error: $e');
   }
+
+  SoundService.init();
+  TtsService.init();
+
   runApp(const WordifyApp());
 }
 

@@ -129,6 +129,179 @@
   </div>
 
   <script>
+    (function() {
+      let audioCtx = null;
+
+      function getAudioContext() {
+        try {
+          if (!audioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) {
+              audioCtx = new AudioContextClass();
+            }
+          }
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+        } catch (e) {
+          console.warn('AudioContext error:', e);
+        }
+        return audioCtx;
+      }
+
+      function unlockAudio() {
+        try {
+          const ctx = getAudioContext();
+          if (ctx && ctx.state === 'suspended') {
+            ctx.resume();
+          }
+          if ('speechSynthesis' in window) {
+            if (window.speechSynthesis.paused) {
+              window.speechSynthesis.resume();
+            }
+            window.speechSynthesis.getVoices();
+          }
+        } catch (e) {}
+      }
+
+      ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'].forEach(function(evt) {
+        window.addEventListener(evt, unlockAudio, { passive: true, capture: true });
+      });
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = function() {
+          try { window.speechSynthesis.getVoices(); } catch (e) {}
+        };
+      }
+
+      function playTone(freq, duration, type, startOffset, gainLevel) {
+        try {
+          const ctx = getAudioContext();
+          if (!ctx) return;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+
+          osc.type = type || 'sine';
+          const startTime = ctx.currentTime + (startOffset || 0);
+          const stopTime = startTime + duration;
+
+          osc.frequency.setValueAtTime(freq, startTime);
+          gain.gain.setValueAtTime(gainLevel || 0.3, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, stopTime);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.start(startTime);
+          osc.stop(stopTime);
+        } catch (e) {
+          console.warn('playTone error:', e);
+        }
+      }
+
+      window.WordifyAudio = {
+        unlock: unlockAudio,
+        playCorrect: function() {
+          try {
+            const ctx = getAudioContext();
+            if (!ctx) return;
+            playTone(587.33, 0.12, 'sine', 0.00, 0.30);
+            playTone(880.00, 0.28, 'sine', 0.10, 0.35);
+          } catch (e) {
+            console.warn('playCorrect error:', e);
+          }
+        },
+        playWrong: function() {
+          try {
+            const ctx = getAudioContext();
+            if (!ctx) return;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            const startTime = ctx.currentTime;
+            const stopTime = startTime + 0.30;
+
+            osc.frequency.setValueAtTime(220, startTime);
+            osc.frequency.exponentialRampToValueAtTime(140, stopTime);
+
+            gain.gain.setValueAtTime(0.30, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, stopTime);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(startTime);
+            osc.stop(stopTime);
+          } catch (e) {
+            console.warn('playWrong error:', e);
+          }
+        },
+        playFinish: function() {
+          try {
+            const ctx = getAudioContext();
+            if (!ctx) return;
+            playTone(523.25, 0.18, 'sine', 0.00, 0.25);
+            playTone(659.25, 0.18, 'sine', 0.16, 0.25);
+            playTone(783.99, 0.20, 'sine', 0.32, 0.28);
+            playTone(1046.50, 0.60, 'triangle', 0.48, 0.35);
+          } catch (e) {
+            console.warn('playFinish error:', e);
+          }
+        },
+        speak: function(text) {
+          try {
+            if (!('speechSynthesis' in window)) return;
+            const synth = window.speechSynthesis;
+            if (!text || typeof text !== 'string' || text.trim() === '') return;
+
+            if (synth.paused) {
+              synth.resume();
+            }
+            synth.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text.trim());
+            utterance.lang = 'en-US';
+            utterance.rate = 0.88;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            const voices = synth.getVoices();
+            if (voices && voices.length > 0) {
+              const enVoice = voices.find(function(v) {
+                return (v.lang === 'en-US' || v.lang === 'en_US') && !v.localService;
+              }) || voices.find(function(v) {
+                return v.lang === 'en-US' || v.lang === 'en_US';
+              }) || voices.find(function(v) {
+                return v.lang && v.lang.toLowerCase().indexOf('en') === 0;
+              });
+              if (enVoice) {
+                utterance.voice = enVoice;
+              }
+            }
+
+            setTimeout(function() {
+              try {
+                if (synth.paused) synth.resume();
+                synth.speak(utterance);
+              } catch (err) {
+                console.warn('synth.speak error:', err);
+              }
+            }, 15);
+          } catch (e) {
+            console.warn('speak error:', e);
+          }
+        },
+        stopSpeech: function() {
+          try {
+            if ('speechSynthesis' in window) {
+              window.speechSynthesis.cancel();
+            }
+          } catch (e) {}
+        }
+      };
+    })();
+  </script>
+  <script>
     window.clearCacheAndReload = async function() {
       try {
         if ('caches' in window) {
@@ -152,7 +325,7 @@
   </script>
   <script>
     (function() {
-      const BUILD_VERSION = '15.10.2026-11.51';
+      const BUILD_VERSION = '15.10.2026-12.25';
       const urlParams = new URLSearchParams(window.location.search);
       const v = urlParams.get('t') || BUILD_VERSION;
       const script = document.createElement('script');

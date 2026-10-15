@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'audio_bridge.dart';
 
 class SoundService {
   static final AudioPlayer _player = AudioPlayer();
@@ -9,36 +10,42 @@ class SoundService {
   static Uint8List? _finishWav;
 
   static void init() {
-    _correctWav = _generateCorrectSound();
-    _wrongWav = _generateWrongSound();
-    _finishWav = _generateFinishSound();
+    bridgeInit();
+    if (!kIsWeb) {
+      _correctWav = _generateCorrectSound();
+      _wrongWav = _generateWrongSound();
+      _finishWav = _generateFinishSound();
+    }
   }
 
   static Future<void> playCorrect() async {
+    if (bridgePlayCorrect()) return;
     try {
       _correctWav ??= _generateCorrectSound();
       await _player.stop();
-      await _player.play(BytesSource(_correctWav!));
+      await _player.play(BytesSource(_correctWav!, mimeType: 'audio/wav'));
     } catch (e) {
       debugPrint('Error playing correct sound: $e');
     }
   }
 
   static Future<void> playWrong() async {
+    if (bridgePlayWrong()) return;
     try {
       _wrongWav ??= _generateWrongSound();
       await _player.stop();
-      await _player.play(BytesSource(_wrongWav!));
+      await _player.play(BytesSource(_wrongWav!, mimeType: 'audio/wav'));
     } catch (e) {
       debugPrint('Error playing wrong sound: $e');
     }
   }
 
   static Future<void> playFinish() async {
+    if (bridgePlayFinish()) return;
     try {
       _finishWav ??= _generateFinishSound();
       await _player.stop();
-      await _player.play(BytesSource(_finishWav!));
+      await _player.play(BytesSource(_finishWav!, mimeType: 'audio/wav'));
     } catch (e) {
       debugPrint('Error playing finish sound: $e');
     }
