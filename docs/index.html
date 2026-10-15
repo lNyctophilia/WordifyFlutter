@@ -199,6 +199,60 @@
         }
       }
 
+      let currentTtsAudio = null;
+
+      function speakWithWebSpeech(cleanText) {
+        if (!('speechSynthesis' in window)) return;
+        const synth = window.speechSynthesis;
+        try {
+          if (synth.paused) synth.resume();
+          synth.cancel();
+
+          const utterance = new SpeechSynthesisUtterance(cleanText);
+          utterance.lang = 'en-US';
+          utterance.rate = 0.88;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+
+          const voices = synth.getVoices() || [];
+          const enVoice = voices.find(function(v) {
+            const name = (v.name || '').toLowerCase();
+            const lang = (v.lang || '').toLowerCase();
+            return name.includes('google') && lang.startsWith('en');
+          }) || voices.find(function(v) {
+            const name = (v.name || '').toLowerCase();
+            const lang = (v.lang || '').toLowerCase();
+            return (name.includes('samantha') || name.includes('daniel') || name.includes('natural') || name.includes('karen')) && lang.startsWith('en');
+          }) || voices.find(function(v) {
+            const lang = (v.lang || '').replace('_', '-').toLowerCase();
+            return lang === 'en-us' && !v.localService;
+          }) || voices.find(function(v) {
+            const lang = (v.lang || '').replace('_', '-').toLowerCase();
+            return lang === 'en-us';
+          }) || voices.find(function(v) {
+            const lang = (v.lang || '').replace('_', '-').toLowerCase();
+            return lang === 'en-gb';
+          }) || voices.find(function(v) {
+            return (v.lang || '').toLowerCase().startsWith('en');
+          });
+
+          if (enVoice) {
+            utterance.voice = enVoice;
+          }
+
+          setTimeout(function() {
+            try {
+              if (synth.paused) synth.resume();
+              synth.speak(utterance);
+            } catch (err) {
+              console.warn('speakWithWebSpeech error:', err);
+            }
+          }, 15);
+        } catch (e) {
+          console.warn('Web Speech error:', e);
+        }
+      }
+
       window.WordifyAudio = {
         unlock: unlockAudio,
         playCorrect: function() {
@@ -250,49 +304,49 @@
         },
         speak: function(text) {
           try {
-            if (!('speechSynthesis' in window)) return;
-            const synth = window.speechSynthesis;
             if (!text || typeof text !== 'string' || text.trim() === '') return;
+            const cleanText = text.trim();
 
-            if (synth.paused) {
-              synth.resume();
+            WordifyAudio.stopSpeech();
+
+            // 1. Google Translate Studio US TTS Audio
+            const googleUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en-US&q=' + encodeURIComponent(cleanText);
+            const audio = new Audio(googleUrl);
+            currentTtsAudio = audio;
+
+            let fallbackTriggered = false;
+            function runFallback() {
+              if (fallbackTriggered) return;
+              fallbackTriggered = true;
+              if (currentTtsAudio === audio) {
+                currentTtsAudio = null;
+              }
+              speakWithWebSpeech(cleanText);
             }
-            synth.cancel();
 
-            const utterance = new SpeechSynthesisUtterance(text.trim());
-            utterance.lang = 'en-US';
-            utterance.rate = 0.88;
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
+            audio.onerror = function() {
+              runFallback();
+            };
 
-            const voices = synth.getVoices();
-            if (voices && voices.length > 0) {
-              const enVoice = voices.find(function(v) {
-                return (v.lang === 'en-US' || v.lang === 'en_US') && !v.localService;
-              }) || voices.find(function(v) {
-                return v.lang === 'en-US' || v.lang === 'en_US';
-              }) || voices.find(function(v) {
-                return v.lang && v.lang.toLowerCase().indexOf('en') === 0;
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(function(err) {
+                console.warn('Google TTS audio playback failed, falling back to Web Speech:', err);
+                runFallback();
               });
-              if (enVoice) {
-                utterance.voice = enVoice;
-              }
             }
-
-            setTimeout(function() {
-              try {
-                if (synth.paused) synth.resume();
-                synth.speak(utterance);
-              } catch (err) {
-                console.warn('synth.speak error:', err);
-              }
-            }, 15);
           } catch (e) {
             console.warn('speak error:', e);
+            speakWithWebSpeech(text.trim());
           }
         },
         stopSpeech: function() {
           try {
+            if (currentTtsAudio) {
+              currentTtsAudio.pause();
+              currentTtsAudio.currentTime = 0;
+              currentTtsAudio = null;
+            }
             if ('speechSynthesis' in window) {
               window.speechSynthesis.cancel();
             }
@@ -325,7 +379,7 @@
   </script>
   <script>
     (function() {
-      const BUILD_VERSION = '15.10.2026-12.26';
+      const BUILD_VERSION = '15.10.2026-12.55';
       const urlParams = new URLSearchParams(window.location.search);
       const v = urlParams.get('t') || BUILD_VERSION;
       const script = document.createElement('script');
