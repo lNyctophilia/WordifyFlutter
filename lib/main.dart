@@ -9,6 +9,7 @@ import 'install_prompt_page.dart';
 import 'login_page.dart';
 import 'settings_page.dart';
 import 'session_page.dart';
+import 'models/exercise_types.dart';
 import 'spaced_repetition_service.dart';
 import 'auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -150,10 +151,12 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     );
   }
 
-  void _startSession(int day) {
+  void _startSession(int day, SessionPart part) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => SessionPage(day: day)),
+      MaterialPageRoute(
+        builder: (context) => SessionPage(day: day, part: part),
+      ),
     );
   }
 
@@ -177,8 +180,8 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
           stream: SpacedRepetitionService.getStatsStreamForDay(activeDay),
           builder: (context, snapshot) {
             final stats = snapshot.data ?? {'new': 0, 'review': 0, 'total_learned': 0};
-            const int newWordsGoal = 10;
-            const int reviewGoal = 25;
+            const int newWordsGoal = SpacedRepetitionService.newWordsPerDay;
+            const int reviewGoal = 20;
             
             final int newDue = stats['new'] ?? 0;
             final int reviewDue = stats['review'] ?? 0;
@@ -328,88 +331,134 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                           const SizedBox(height: 24),
                           
                           // Main Task Card
-                          Container(
-                            padding: const EdgeInsets.all(28),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF131D36).withValues(alpha: 0.8),
-                              borderRadius: BorderRadius.circular(28),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.05),
-                                width: 1,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Gün $activeDay Hedefi',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
+                          StreamBuilder<DayPartProgress>(
+                            stream: SpacedRepetitionService.getDayPartProgressStream(activeDay),
+                            builder: (context, partSnap) {
+                              final partProgress = partSnap.data ?? const DayPartProgress();
+                              final nextPartIdx = partProgress.nextPartIndex;
+                              final allDone = partProgress.allDone;
+
+                              // Başlatılacak Part
+                              final parts = [
+                                SessionPart.introduction,
+                                SessionPart.deepening,
+                                SessionPart.review,
+                                if (partProgress.bonusNeeded) SessionPart.bonus,
+                              ];
+                              final nextPart = (nextPartIdx != null && nextPartIdx < parts.length)
+                                  ? parts[nextPartIdx]
+                                  : SessionPart.introduction;
+
+                              return Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF131D36).withValues(alpha: 0.8),
+                                  borderRadius: BorderRadius.circular(28),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.05),
+                                    width: 1,
                                   ),
                                 ),
-                                const SizedBox(height: 32),
-                                
-                                // Progress Bars
-                                _buildProgressBar(
-                                  title: 'Yeni Kelimeler',
-                                  current: newDone,
-                                  total: currentNewGoal,
-                                  color: const Color(0xFF3A86FF),
-                                  icon: Icons.auto_awesome_rounded,
-                                ),
-                                const SizedBox(height: 24),
-                                _buildProgressBar(
-                                  title: 'Tekrarlar (Review)',
-                                  current: reviewDone,
-                                  total: currentReviewGoal,
-                                  color: const Color(0xFF00E676),
-                                  icon: Icons.refresh_rounded,
-                                ),
-                                
-                                const SizedBox(height: 40),
-                                
-                                // Start Button
-                                Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(24),
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFF3A86FF), Color(0xFF00B4D8)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                  ),
-                                  child: ElevatedButton(
-                                    onPressed: () => _startSession(activeDay),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.transparent,
-                                      shadowColor: Colors.transparent,
-                                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(24),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'Gün $activeDay',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
                                       ),
                                     ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          'Eğitime Başla',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                            letterSpacing: 0.5,
+                                    const SizedBox(height: 20),
+
+                                    // Part durumları
+                                    _buildPartStatusRow(
+                                      partProgress: partProgress,
+                                      bonusNeeded: partProgress.bonusNeeded,
+                                    ),
+
+                                    const SizedBox(height: 24),
+
+                                    // Progress Bars
+                                    _buildProgressBar(
+                                      title: 'Yeni Kelimeler',
+                                      current: newDone,
+                                      total: currentNewGoal,
+                                      color: const Color(0xFF3A86FF),
+                                      icon: Icons.auto_awesome_rounded,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    _buildProgressBar(
+                                      title: 'Tekrarlar',
+                                      current: reviewDone,
+                                      total: currentReviewGoal,
+                                      color: const Color(0xFF00E676),
+                                      icon: Icons.refresh_rounded,
+                                    ),
+
+                                    const SizedBox(height: 32),
+
+                                    // Start / Continue Button
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(24),
+                                        gradient: allDone
+                                            ? const LinearGradient(
+                                                colors: [Color(0xFF00E676), Color(0xFF00B4D8)],
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              )
+                                            : const LinearGradient(
+                                                colors: [Color(0xFF3A86FF), Color(0xFF00B4D8)],
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              ),
+                                      ),
+                                      child: ElevatedButton(
+                                        onPressed: allDone
+                                            ? null
+                                            : () => _startSession(activeDay, nextPart),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.transparent,
+                                          disabledBackgroundColor: Colors.transparent,
+                                          shadowColor: Colors.transparent,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 32, vertical: 16),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(24),
                                           ),
                                         ),
-                                        SizedBox(width: 12),
-                                        Icon(Icons.arrow_forward_rounded, color: Colors.white),
-                                      ],
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              allDone
+                                                  ? '✅ Gün Tamamlandı'
+                                                  : nextPartIdx == 0
+                                                      ? 'Eğitime Başla'
+                                                      : 'Devam Et',
+                                              style: const TextStyle(
+                                                fontSize: 17,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                                letterSpacing: 0.4,
+                                              ),
+                                            ),
+                                            if (!allDone) ...[
+                                              const SizedBox(width: 10),
+                                              const Icon(
+                                                  Icons.arrow_forward_rounded,
+                                                  color: Colors.white),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
 
                   
@@ -491,6 +540,84 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPartStatusRow({
+    required DayPartProgress partProgress,
+    required bool bonusNeeded,
+  }) {
+    final parts = [
+      (label: 'P1', done: partProgress.part1Completed, color: const Color(0xFF3A86FF)),
+      (label: 'P2', done: partProgress.part2Completed, color: const Color(0xFF7209B7)),
+      (label: 'P3', done: partProgress.part3Completed, color: const Color(0xFF00E676)),
+      if (bonusNeeded)
+        (label: 'Bonus', done: partProgress.bonusCompleted, color: const Color(0xFFFFB703)),
+    ];
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (int i = 0; i < parts.length; i++) ...[
+          _partChip(
+            label: parts[i].label,
+            done: parts[i].done,
+            color: parts[i].color,
+          ),
+          if (i < parts.length - 1)
+            Container(
+              width: 20,
+              height: 2,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              color: i < parts.length - 1 && parts[i].done
+                  ? parts[i].color.withValues(alpha: 0.5)
+                  : const Color(0xFF1E2D4A),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _partChip({
+    required String label,
+    required bool done,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: done ? color.withValues(alpha: 0.2) : const Color(0xFF0A1128),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: done ? color : const Color(0xFF1E2D4A),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (done)
+            Icon(Icons.check_rounded, color: color, size: 14)
+          else
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E2D4A),
+                shape: BoxShape.circle,
+              ),
+            ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: done ? color : Colors.white38,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],

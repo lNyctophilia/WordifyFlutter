@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:convert';
 import 'dart:math' as math;
+import 'models/exercise_types.dart';
 
 class SpacedWord {
   final String id;
@@ -16,6 +17,8 @@ class SpacedWord {
   final bool isLearning;
   final int assignedDay;
   final int dueDay;
+  final int wrongCount;
+  final bool mastered;
 
   SpacedWord({
     required this.id,
@@ -28,6 +31,8 @@ class SpacedWord {
     required this.isLearning,
     this.assignedDay = 1,
     this.dueDay = 1,
+    this.wrongCount = 0,
+    this.mastered = false,
   });
 
   factory SpacedWord.fromMap(String id, Map<String, dynamic> data) {
@@ -42,6 +47,8 @@ class SpacedWord {
       isLearning: data['is_learning'] ?? true,
       assignedDay: data['assigned_day'] ?? 1,
       dueDay: data['due_day'] ?? 1,
+      wrongCount: data['wrong_count'] ?? 0,
+      mastered: data['mastered'] ?? false,
     );
   }
 
@@ -56,7 +63,63 @@ class SpacedWord {
       'is_learning': isLearning,
       'assigned_day': assignedDay,
       'due_day': dueDay,
+      'wrong_count': wrongCount,
+      'mastered': mastered,
     };
+  }
+}
+
+/// Part tamamlanma durumu.
+class DayPartProgress {
+  final bool part1Completed;
+  final bool part2Completed;
+  final bool part3Completed;
+  final bool bonusNeeded;
+  final bool bonusCompleted;
+  final List<String> wrongWordsInSession;
+
+  const DayPartProgress({
+    this.part1Completed = false,
+    this.part2Completed = false,
+    this.part3Completed = false,
+    this.bonusNeeded = false,
+    this.bonusCompleted = false,
+    this.wrongWordsInSession = const [],
+  });
+
+  factory DayPartProgress.fromMap(Map<String, dynamic> data) {
+    return DayPartProgress(
+      part1Completed: data['part1_completed'] ?? false,
+      part2Completed: data['part2_completed'] ?? false,
+      part3Completed: data['part3_completed'] ?? false,
+      bonusNeeded: data['bonus_needed'] ?? false,
+      bonusCompleted: data['bonus_completed'] ?? false,
+      wrongWordsInSession: List<String>.from(data['wrong_words_in_session'] ?? []),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'part1_completed': part1Completed,
+      'part2_completed': part2Completed,
+      'part3_completed': part3Completed,
+      'bonus_needed': bonusNeeded,
+      'bonus_completed': bonusCompleted,
+      'wrong_words_in_session': wrongWordsInSession,
+    };
+  }
+
+  bool get allDone => part1Completed && part2Completed && part3Completed &&
+      (!bonusNeeded || bonusCompleted);
+
+  /// Tamamlanmamış ilk Part indeksini döndürür (0-based).
+  /// Null: tüm part'lar bitti.
+  int? get nextPartIndex {
+    if (!part1Completed) return 0;
+    if (!part2Completed) return 1;
+    if (!part3Completed) return 2;
+    if (bonusNeeded && !bonusCompleted) return 3;
+    return null;
   }
 }
 
@@ -76,108 +139,29 @@ class SpacedRepetitionService {
     return _firestore.collection('users').doc(uid).collection('words');
   }
 
+  static CollectionReference<Map<String, dynamic>>? _dayProgressCollection() {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
+    return _firestore.collection('users').doc(uid).collection('day_progress');
+  }
+
   static int _cachedDay = 1;
 
-  /// Kullanıcı profil verilerini (seri, haftalık aktivite vb.) izleyen Stream
-  static Stream<Map<String, dynamic>> getUserProfileStream() {
-    final doc = _userDoc();
-    if (doc == null) {
-      return Stream.value({
-        'current_day': _cachedDay,
-        'streak': 0,
-        'weekly_activity': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-      });
-    }
-
-    return doc.snapshots().map((snapshot) {
-      final data = snapshot.data() ?? {};
-      final streak = (data['streak'] as num?)?.toInt() ?? 0;
-      final rawActivity = data['weekly_activity'];
-      List<double> activity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-
-      if (rawActivity is List) {
-        activity = rawActivity.map((e) => ((e as num?)?.toDouble() ?? 0.0).clamp(0.0, 1.0)).toList();
-        while (activity.length < 7) {
-          activity.add(0.0);
-        }
-      }
-
-      final dbDay = (data['current_day'] ?? data['currentDay'] as num?)?.toInt();
-      if (dbDay != null && dbDay > _cachedDay) {
-        _cachedDay = dbDay;
-      }
-
-      return {
-        'current_day': _cachedDay,
-        'streak': streak,
-        'weekly_activity': activity,
-      };
-    });
-  }
-
-  /// Çalışma aktivitesini kaydet (Seri ve haftalık aktiviteyi artırır)
-  static Future<void> recordStudyActivity() async {
-    final doc = _userDoc();
-    if (doc == null) return;
-
-    final now = DateTime.now();
-    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final weekdayIndex = now.weekday - 1; // 0: Pzt, ..., 6: Paz
-
-    final snap = await doc.get();
-    final data = snap.data() ?? {};
-    final lastDateStr = data['last_study_date'] as String?;
-    int streak = (data['streak'] as num?)?.toInt() ?? 0;
-
-    if (lastDateStr == null) {
-      streak = 1;
-    } else if (lastDateStr != todayStr) {
-      final lastDate = DateTime.tryParse(lastDateStr);
-      if (lastDate != null) {
-        final diff = DateTime(now.year, now.month, now.day)
-            .difference(DateTime(lastDate.year, lastDate.month, lastDate.day))
-            .inDays;
-        if (diff == 1) {
-          streak += 1;
-        } else if (diff > 1) {
-          streak = 1;
-        }
-      } else {
-        streak = 1;
-      }
-    }
-
-    List<double> activity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-    final rawActivity = data['weekly_activity'];
-    if (rawActivity is List) {
-      activity = rawActivity.map((e) => (e as num?)?.toDouble() ?? 0.0).toList();
-      while (activity.length < 7) {
-        activity.add(0.0);
-      }
-    }
-    // İlgili günün barını artır (en fazla 1.0)
-    activity[weekdayIndex] = (activity[weekdayIndex] + 0.1).clamp(0.0, 1.0);
-
-    await doc.set({
-      'streak': streak,
-      'last_study_date': todayStr,
-      'weekly_activity': activity,
-    }, SetOptions(merge: true));
-  }
-
-  // SM-2 Algoritması gün aralıkları
+  // ─── SRS Interval Tablosu ────────────────────────────────────────────────
+  /// Step → gün aralığı (daha uzun, daha kalıcı hafıza için).
   static const List<int> _intervals = [
-    0,    // Adım 0: Aynı gün
-    1,    // Adım 1: 1 gün sonra
-    2,    // Adım 2: 2 gün sonra
-    4,    // Adım 3: 4 gün sonra
-    7,    // Adım 4: 7 gün sonra (1 hafta)
-    16,   // Adım 5: 16 gün sonra
-    35,   // Adım 6: 35 gün sonra (~1 ay)
-    90,   // Adım 7: 90 gün sonra (~3 ay)
-    180,  // Adım 8: 180 gün sonra (~6 ay)
+    0,   // Step 0: Yeni kelime, aynı gün
+    1,   // Step 1: Ertesi gün
+    3,   // Step 2: 3 gün sonra
+    7,   // Step 3: 1 hafta
+    14,  // Step 4: 2 hafta
+    30,  // Step 5: 1 ay
+    60,  // Step 6: 2 ay
+    120, // Step 7: 4 ay
+    365, // Step 8: 1 yıl (ustalaşmış)
   ];
 
+  // ─── Dictionary Cache ─────────────────────────────────────────────────────
   static Map<String, String>? _dictionary;
   static List<String>? _allWordsList;
 
@@ -219,7 +203,6 @@ class SpacedRepetitionService {
     final normalizedCorrect = correctWord.toLowerCase().trim();
     final distractors = <String>{};
     final random = math.Random();
-
     while (distractors.length < count) {
       final candidate = _allWordsList![random.nextInt(_allWordsList!.length)];
       if (candidate != normalizedCorrect) {
@@ -229,42 +212,129 @@ class SpacedRepetitionService {
     return distractors.toList();
   }
 
-  static Future<void> initMockDataIfEmpty() async {
-    await loadDictionaryIfNeeded();
-    final currentDay = await getCurrentDay();
-    await _ensureWordsForDay(currentDay);
-  }
+  // ─── Kullanıcı Profili ────────────────────────────────────────────────────
 
-  /// Kullanıcının aktif gününü izleyen Stream
-  static Stream<int> getUserDayStream() {
+  static Stream<Map<String, dynamic>> getUserProfileStream() {
     final doc = _userDoc();
-    if (doc == null) return Stream.value(_cachedDay);
+    if (doc == null) {
+      return Stream.value({
+        'current_day': _cachedDay,
+        'streak': 0,
+        'weekly_activity': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      });
+    }
+
     return doc.snapshots().map((snapshot) {
-      final dbDay = (snapshot.data()?['current_day'] ?? snapshot.data()?['currentDay'] as num?)?.toInt();
-      if (dbDay != null && dbDay > _cachedDay) {
-        _cachedDay = dbDay;
+      final data = snapshot.data() ?? {};
+      final streak = (data['streak'] as num?)?.toInt() ?? 0;
+      final rawActivity = data['weekly_activity'];
+      List<double> activity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+
+      if (rawActivity is List) {
+        activity = rawActivity
+            .map((e) => ((e as num?)?.toDouble() ?? 0.0).clamp(0.0, 1.0))
+            .toList();
+        while (activity.length < 7) {
+          activity.add(0.0);
+        }
       }
-      return _cachedDay;
+
+      final dbDay =
+          (data['current_day'] ?? data['currentDay'] as num?)?.toInt();
+      if (dbDay != null && dbDay > _cachedDay) _cachedDay = dbDay;
+
+      return {
+        'current_day': _cachedDay,
+        'streak': streak,
+        'weekly_activity': activity,
+      };
     });
   }
 
-  /// Kullanıcının kayıtlı gününü getirme
+  static Future<void> recordStudyActivity() async {
+    final doc = _userDoc();
+    if (doc == null) return;
+
+    final now = DateTime.now();
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final weekdayIndex = now.weekday - 1;
+
+    final snap = await doc.get();
+    final data = snap.data() ?? {};
+    final lastDateStr = data['last_study_date'] as String?;
+    int streak = (data['streak'] as num?)?.toInt() ?? 0;
+
+    if (lastDateStr == null) {
+      streak = 1;
+    } else if (lastDateStr != todayStr) {
+      final lastDate = DateTime.tryParse(lastDateStr);
+      if (lastDate != null) {
+        final diff = DateTime(now.year, now.month, now.day)
+            .difference(
+                DateTime(lastDate.year, lastDate.month, lastDate.day))
+            .inDays;
+        if (diff == 1) {
+          streak += 1;
+        } else if (diff > 1) {
+          streak = 1;
+        }
+      } else {
+        streak = 1;
+      }
+    }
+
+    List<double> activity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    final rawActivity = data['weekly_activity'];
+    if (rawActivity is List) {
+      activity =
+          rawActivity.map((e) => (e as num?)?.toDouble() ?? 0.0).toList();
+      while (activity.length < 7) {
+        activity.add(0.0);
+      }
+    }
+    activity[weekdayIndex] = (activity[weekdayIndex] + 0.1).clamp(0.0, 1.0);
+
+    await doc.set({
+      'streak': streak,
+      'last_study_date': todayStr,
+      'weekly_activity': activity,
+    }, SetOptions(merge: true));
+  }
+
+  // ─── Gün Yönetimi ─────────────────────────────────────────────────────────
+
+  static Stream<Map<String, dynamic>> getUserDayStream() {
+    final doc = _userDoc();
+    if (doc == null) return Stream.value({'current_day': _cachedDay});
+    return doc.snapshots().map((snapshot) {
+      final dbDay = (snapshot.data()?['current_day'] ??
+              snapshot.data()?['currentDay'] as num?)
+          ?.toInt();
+      if (dbDay != null && dbDay > _cachedDay) _cachedDay = dbDay;
+      return {'current_day': _cachedDay};
+    });
+  }
+
+  static Stream<int> getUserDayIntStream() {
+    return getUserDayStream().map((m) => (m['current_day'] as num?)?.toInt() ?? 1);
+  }
+
   static Future<int> getCurrentDay() async {
     final doc = _userDoc();
     if (doc == null) return _cachedDay;
     try {
       final snap = await doc.get();
-      final dbDay = (snap.data()?['current_day'] ?? snap.data()?['currentDay'] as num?)?.toInt();
-      if (dbDay != null && dbDay > _cachedDay) {
-        _cachedDay = dbDay;
-      }
+      final dbDay = (snap.data()?['current_day'] ??
+              snap.data()?['currentDay'] as num?)
+          ?.toInt();
+      if (dbDay != null && dbDay > _cachedDay) _cachedDay = dbDay;
     } catch (e) {
       debugPrint('getCurrentDay error: $e');
     }
     return _cachedDay;
   }
 
-  /// Aktif günü veritabanında güncelleme
   static Future<void> setCurrentDay(int day) async {
     final safeDay = math.max(1, day);
     _cachedDay = safeDay;
@@ -282,14 +352,24 @@ class SpacedRepetitionService {
     await _ensureWordsForDay(safeDay);
   }
 
-  /// İlgili güne ait 10 yeni kelimeyi listeye dahil etme
+  // ─── Kelime Yükleme ────────────────────────────────────────────────────────
+
+  /// Günlük 5 yeni kelime (eski 10'dan değiştirildi).
+  static const int newWordsPerDay = 5;
+
+  static Future<void> initMockDataIfEmpty() async {
+    await loadDictionaryIfNeeded();
+    final currentDay = await getCurrentDay();
+    await _ensureWordsForDay(currentDay);
+  }
+
   static Future<void> _ensureWordsForDay(int day) async {
     await loadDictionaryIfNeeded();
     final collection = _userWordsCollection();
     if (collection == null) return;
 
-    // Bu güne atanmış kelimeler var mı kontrol et
-    final existingSnap = await collection.where('assigned_day', isEqualTo: day).get();
+    final existingSnap =
+        await collection.where('assigned_day', isEqualTo: day).get();
     if (existingSnap.docs.isNotEmpty) return;
 
     String fileText = '';
@@ -301,13 +381,14 @@ class SpacedRepetitionService {
     }
 
     final List<String> lines = const LineSplitter().convert(fileText);
-    final startIndex = (day - 1) * 10;
+    // 5 kelime/gün ile indeks hesaplaması
+    final startIndex = (day - 1) * newWordsPerDay;
     if (startIndex >= lines.length) return;
 
     final batch = _firestore.batch();
     int added = 0;
 
-    for (int i = startIndex; i < lines.length && added < 10; i++) {
+    for (int i = startIndex; i < lines.length && added < newWordsPerDay; i++) {
       final line = lines[i];
       if (line.trim().isEmpty) continue;
 
@@ -321,7 +402,8 @@ class SpacedRepetitionService {
         if (parts.length >= 4) {
           exampleTr = parts[2].trim();
           exampleEn = parts[3].trim();
-          exampleEn = exampleEn.replaceAll(RegExp(r'\((.*?)\)'), '________');
+          // Parantez içi metni _____ ile değiştir
+          exampleEn = exampleEn.replaceAll(RegExp(r'\((.*?)\)'), '_____');
         }
 
         final docRef = collection.doc(wordEn);
@@ -335,82 +417,126 @@ class SpacedRepetitionService {
           'is_learning': true,
           'assigned_day': day,
           'due_day': day,
+          'wrong_count': 0,
+          'mastered': false,
         }, SetOptions(merge: true));
         added++;
       }
     }
 
-    if (added > 0) {
-      await batch.commit();
+    if (added > 0) await batch.commit();
+  }
+
+  // ─── Part Yönetimi ─────────────────────────────────────────────────────────
+
+  static Future<DayPartProgress> getDayPartProgress(int day) async {
+    final col = _dayProgressCollection();
+    if (col == null) return const DayPartProgress();
+    try {
+      final snap = await col.doc('day_$day').get();
+      if (!snap.exists || snap.data() == null) return const DayPartProgress();
+      return DayPartProgress.fromMap(snap.data()!);
+    } catch (e) {
+      debugPrint('getDayPartProgress error: $e');
+      return const DayPartProgress();
     }
   }
 
-  static Future<void> resetUserData() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return;
-
-    final userDoc = _firestore.collection('users').doc(uid);
-    final collection = userDoc.collection('words');
-
-    final snapshot = await collection.get();
-    final batch = _firestore.batch();
-    for (var doc in snapshot.docs) {
-      batch.delete(doc.reference);
-    }
-
-    batch.set(userDoc, {
-      'last_word_index': 0,
-      'current_day': 1,
-    }, SetOptions(merge: true));
-
-    await batch.commit();
-    await _ensureWordsForDay(1);
-  }
-
-  /// Seçili güne özel istatistikleri dinleyen Stream
-  static Stream<Map<String, int>> getStatsStreamForDay(int activeDay) {
-    final collection = _userWordsCollection();
-    if (collection == null) return Stream.value({'new': 0, 'review': 0, 'total_learned': 0, 'total_words': 0});
-
-    return collection.snapshots().map((snapshot) {
-      int newDue = 0;
-      int reviewDue = 0;
-      int totalLearned = 0;
-      int totalWords = snapshot.docs.length;
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final int assignedDay = data['assigned_day'] ?? 1;
-        final int dueDay = data['due_day'] ?? 1;
-        final int step = data['step'] ?? 0;
-
-        if (step >= 2) {
-          totalLearned++;
-        }
-
-        if (assignedDay == activeDay) {
-          // O günün yeni kelimesi henüz bitirilmemişse
-          if (dueDay <= activeDay) {
-            newDue++;
-          }
-        } else if (assignedDay < activeDay) {
-          // Önceki günlerden gelen tekrar kelimesi
-          if (dueDay <= activeDay) {
-            reviewDue++;
-          }
-        }
-      }
-
-      return {
-        'new': newDue,
-        'review': reviewDue,
-        'total_learned': totalLearned,
-        'total_words': totalWords,
-      };
+  static Stream<DayPartProgress> getDayPartProgressStream(int day) {
+    final col = _dayProgressCollection();
+    if (col == null) return Stream.value(const DayPartProgress());
+    return col.doc('day_$day').snapshots().map((snap) {
+      if (!snap.exists || snap.data() == null) return const DayPartProgress();
+      return DayPartProgress.fromMap(snap.data()!);
     });
   }
 
-  /// Seçili gün için seans kelimelerini getirme
+  static Future<void> markPartCompleted(int day, SessionPart part) async {
+    final col = _dayProgressCollection();
+    if (col == null) return;
+
+    final Map<String, dynamic> update = {};
+    switch (part) {
+      case SessionPart.introduction:
+        update['part1_completed'] = true;
+        break;
+      case SessionPart.deepening:
+        update['part2_completed'] = true;
+        break;
+      case SessionPart.review:
+        update['part3_completed'] = true;
+        break;
+      case SessionPart.bonus:
+        update['bonus_completed'] = true;
+        break;
+    }
+
+    try {
+      await col.doc('day_$day').set(update, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('markPartCompleted error: $e');
+    }
+  }
+
+  static Future<void> updateWrongWordsInSession(
+      int day, List<String> wrongWords) async {
+    final col = _dayProgressCollection();
+    if (col == null) return;
+
+    final bonusNeeded = wrongWords.length >= 2;
+    try {
+      await col.doc('day_$day').set({
+        'wrong_words_in_session': wrongWords,
+        'bonus_needed': bonusNeeded,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('updateWrongWordsInSession error: $e');
+    }
+  }
+
+  // ─── Seans Kelime Getirme ─────────────────────────────────────────────────
+
+  /// [day] için Part 1+2'de kullanılacak yeni kelimeleri döndürür.
+  static Future<List<SpacedWord>> getNewWordsForDay(int day) async {
+    await loadDictionaryIfNeeded();
+    await _ensureWordsForDay(day);
+
+    final collection = _userWordsCollection();
+    if (collection == null) return [];
+
+    final snap =
+        await collection.where('assigned_day', isEqualTo: day).get();
+    return snap.docs
+        .map((doc) => SpacedWord.fromMap(doc.id, doc.data()))
+        .take(newWordsPerDay)
+        .toList();
+  }
+
+  /// [day] için Part 3'te kullanılacak tekrar kelimelerini döndürür.
+  /// Step'e göre sıralanır: düşük step önce (daha zor, daha az pekişmiş).
+  static Future<List<SpacedWord>> getReviewWordsForDay(int day) async {
+    await loadDictionaryIfNeeded();
+
+    final collection = _userWordsCollection();
+    if (collection == null) return [];
+
+    final snap = await collection.get();
+    final List<SpacedWord> reviewWords = [];
+
+    for (var doc in snap.docs) {
+      final w = SpacedWord.fromMap(doc.id, doc.data());
+      // Önceki günlerin kelimelerinden due olanlar
+      if (w.assignedDay < day && w.dueDay <= day) {
+        reviewWords.add(w);
+      }
+    }
+
+    // Step'e göre sırala (düşük step → daha fazla tekrar ihtiyacı)
+    reviewWords.sort((a, b) => a.step.compareTo(b.step));
+    return reviewWords.take(20).toList();
+  }
+
+  /// Eski `getSessionForDay` — geriye dönük uyumluluk için korunur.
   static Future<List<SpacedWord>> getSessionForDay(int activeDay) async {
     await loadDictionaryIfNeeded();
     await _ensureWordsForDay(activeDay);
@@ -431,15 +557,26 @@ class SpacedRepetitionService {
       }
     }
 
-    newWords = newWords.take(10).toList();
-    reviewWords = reviewWords.take(25).toList();
+    newWords = newWords.take(newWordsPerDay).toList();
+    reviewWords = reviewWords.take(20).toList();
 
     final allWords = [...newWords, ...reviewWords];
     allWords.shuffle();
     return allWords;
   }
 
-  /// Cevap sonucunda kelimenin adımını ve sıradaki gününü güncelleme
+  // ─── Egzersiz Tipi Belirleme ───────────────────────────────────────────────
+
+  /// [step] seviyesine göre Part 3 için uygun egzersiz tipini döndürür.
+  static ExerciseType getExerciseTypeForStep(int step) {
+    if (step <= 1) return ExerciseType.hintedWriting;
+    if (step <= 3) return ExerciseType.trToEnWriting;
+    if (step <= 5) return ExerciseType.clozeWriting;
+    return ExerciseType.listeningWriting;
+  }
+
+  // ─── İlerleme Güncelleme ─────────────────────────────────────────────────
+
   static Future<void> updateWordProgress(
     String wordId,
     bool isCorrect, {
@@ -457,17 +594,19 @@ class SpacedRepetitionService {
 
       final data = snapshot.data()!;
       int step = data['step'] ?? 0;
+      int wrongCount = data['wrong_count'] ?? 0;
 
       if (isCorrect) {
-        if (step < _intervals.length - 1) {
-          step++;
-        }
+        if (step < _intervals.length - 1) step++;
       } else {
-        step = (step > 1) ? step - 1 : 0;
+        // Yanlışta 2 adım geri (planlandığı gibi)
+        step = (step > 2) ? step - 2 : 0;
+        wrongCount++;
       }
 
       final intervalDays = _intervals[step];
       final nextDueDay = day + (isCorrect ? intervalDays : 1);
+      final mastered = step >= 6;
 
       transaction.update(docRef, {
         'step': step,
@@ -476,9 +615,81 @@ class SpacedRepetitionService {
           DateTime.now().add(Duration(days: intervalDays)),
         ),
         'is_learning': step <= 1,
+        'wrong_count': wrongCount,
+        'mastered': mastered,
       });
     });
 
     await recordStudyActivity();
+  }
+
+  // ─── İstatistikler ────────────────────────────────────────────────────────
+
+  static Stream<Map<String, int>> getStatsStreamForDay(int activeDay) {
+    final collection = _userWordsCollection();
+    if (collection == null) {
+      return Stream.value(
+          {'new': 0, 'review': 0, 'total_learned': 0, 'total_words': 0});
+    }
+
+    return collection.snapshots().map((snapshot) {
+      int newDue = 0;
+      int reviewDue = 0;
+      int totalLearned = 0;
+      int totalWords = snapshot.docs.length;
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final int assignedDay = data['assigned_day'] ?? 1;
+        final int dueDay = data['due_day'] ?? 1;
+        final int step = data['step'] ?? 0;
+
+        if (step >= 2) totalLearned++;
+
+        if (assignedDay == activeDay) {
+          if (dueDay <= activeDay) newDue++;
+        } else if (assignedDay < activeDay) {
+          if (dueDay <= activeDay) reviewDue++;
+        }
+      }
+
+      return {
+        'new': newDue,
+        'review': reviewDue,
+        'total_learned': totalLearned,
+        'total_words': totalWords,
+      };
+    });
+  }
+
+  // ─── Sıfırlama ────────────────────────────────────────────────────────────
+
+  static Future<void> resetUserData() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+
+    final userDoc = _firestore.collection('users').doc(uid);
+    final wordsCol = userDoc.collection('words');
+    final progressCol = userDoc.collection('day_progress');
+
+    final wordSnap = await wordsCol.get();
+    final progressSnap = await progressCol.get();
+
+    final batch = _firestore.batch();
+    for (var doc in wordSnap.docs) {
+      batch.delete(doc.reference);
+    }
+    for (var doc in progressSnap.docs) {
+      batch.delete(doc.reference);
+    }
+
+    batch.set(userDoc, {
+      'last_word_index': 0,
+      'current_day': 1,
+      'currentDay': 1,
+    }, SetOptions(merge: true));
+
+    await batch.commit();
+    await _ensureWordsForDay(1);
   }
 }
