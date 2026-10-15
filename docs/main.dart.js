@@ -29075,7 +29075,7 @@ if(m.b===200){h=m
 l=t.a.a(B.dz.WD(A.b2Q(A.b0d(h.e)).fZ(h.w),null))
 g=A.a8(J.fW(l,"fullVersion"))
 k=g==null?"":g
-j="Versiyon (15.10.2026-12.25)"
+j="Versiyon (15.10.2026-12.26)"
 if(J.cC(k)!==0&&!J.d(k,j)){if(a.e!=null)A.aZ8(a,k)}else if(a0&&a.e!=null){f=a.an(t.Pu).f
 f.Y7()
 h=t.p
@@ -95152,7 +95152,7 @@ q=A.bK(16)
 p=A.e2(B.j.bE(0.07),1)
 o=A.bK(12)
 n=A.b([new A.dn(1,B.c7,B.w.bE(0.2),B.h,16)],t.sq)
-r.push(A.bF(h,A.ch(A.b([A.bF(h,A.Lx(A.bK(12),A.aIA("assets/icon.png",B.jo,h,h)),B.m,h,h,new A.bB(h,h,h,o,n,h,B.O),h,52,h,h,h,h,h,52),B.dm,B.Yx,B.iy,A.bh("Versiyon (15.10.2026-12.25)",h,h,h,B.WV,h,h),B.Ak,A.aHX(B.j.bE(0.06),40,1,40),B.Ak,B.YK,B.fC,B.Yy],s),B.v,B.t,B.x),B.m,h,h,new A.bB(B.b0,h,p,q,h,h,B.O),h,h,h,h,B.GE,h,h,h))
+r.push(A.bF(h,A.ch(A.b([A.bF(h,A.Lx(A.bK(12),A.aIA("assets/icon.png",B.jo,h,h)),B.m,h,h,new A.bB(h,h,h,o,n,h,B.O),h,52,h,h,h,h,h,52),B.dm,B.Yx,B.iy,A.bh("Versiyon (15.10.2026-12.26)",h,h,h,B.WV,h,h),B.Ak,A.aHX(B.j.bE(0.06),40,1,40),B.Ak,B.YK,B.fC,B.Yy],s),B.v,B.t,B.x),B.m,h,h,new A.bB(B.b0,h,p,q,h,h,B.O),h,h,h,h,B.GE,h,h,h))
 q=A.a7([null,0],t.LO,t.S)
 s=r.length
 return A.vY(f,B.aE,A.kD(!0,A.hu(new A.eL(B.Cq,new A.Oi(new A.alV(!0,!0,!0,r,q),B.hm,B.aJ,!1,h,h,B.BM,!1,h,h,s,B.aF,h,h,B.a1,B.aM,h),h),h,h),!0))}}
@@ -95290,7 +95290,7 @@ if(k===q){if(j<=q)++p}else if(k<q)o=j<=q?o+1:o}return A.a7(["new",p,"review",o,"
 $S:655}
 A.aoh.prototype={
 $1(a){var s=null,r=A.bK(16),q=A.bK(8),p=A.e2(B.nz,1),o=t.p
-q=A.ch(A.b([B.YB,B.bM,A.bF(s,A.ch(A.b([A.bh("Mevcut: Versiyon (15.10.2026-12.25)",s,s,s,B.Ue,s,s),B.iy,A.bh("Yeni: "+this.a,s,s,s,B.XH,s,s)],o),B.ak,B.t,B.x),B.m,s,s,new A.bB(B.Ez,s,p,q,s,s,B.O),s,s,s,s,B.o8,s,s,1/0)],o),B.ak,B.t,B.am)
+q=A.ch(A.b([B.YB,B.bM,A.bF(s,A.ch(A.b([A.bh("Mevcut: Versiyon (15.10.2026-12.26)",s,s,s,B.Ue,s,s),B.iy,A.bh("Yeni: "+this.a,s,s,s,B.XH,s,s)],o),B.ak,B.t,B.x),B.m,s,s,new A.bB(B.Ez,s,p,q,s,s,B.O),s,s,s,s,B.o8,s,s,1/0)],o),B.ak,B.t,B.am)
 return A.aJU(!1,A.aGV(A.b([A.S6(B.Yv,new A.aog(a),s),B.a0W],o),B.b0,q,new A.cj(r,B.Cg),B.PY),s,t.z)},
 $S:656}
 A.aog.prototype={
