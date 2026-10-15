@@ -106,9 +106,10 @@ class _SessionPageState extends State<SessionPage>
 
   // Seans içinde yanlış bilinen kelimeler (bonus için)
   final Map<String, int> _wrongCountMap = {};
+  bool _noReviewForPart3 = false;
 
   final TextEditingController _textController = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
+  FocusNode _focusNode = FocusNode();
   late AnimationController _shakeController;
 
   // Dinleme modunda kelimeyi kaç kez dinledi
@@ -139,6 +140,7 @@ class _SessionPageState extends State<SessionPage>
 
   Future<void> _loadPartQuestions() async {
     try {
+      await SpacedRepetitionService.setCurrentPart(widget.day, widget.part);
       List<ExerciseQuestion> questions = [];
 
       switch (widget.part) {
@@ -160,6 +162,21 @@ class _SessionPageState extends State<SessionPage>
           final words =
               await SpacedRepetitionService.getReviewWordsForDay(widget.day);
           _newWords = words;
+          if (words.isEmpty) {
+            await SpacedRepetitionService.markPartCompleted(
+              widget.day,
+              SessionPart.review,
+              reviewCount: 0,
+            );
+            if (mounted) {
+              setState(() {
+                _questions = [];
+                _isLoading = false;
+                _isPartFinished = true;
+              });
+            }
+            return;
+          }
           questions = buildPart3Questions(words);
           break;
 
@@ -190,6 +207,9 @@ class _SessionPageState extends State<SessionPage>
         // İlk soruyu seslendir
         if (_questions.isNotEmpty) {
           _speakCurrentQuestion(_questions[0]);
+          if (_questions[0].type != ExerciseType.flashcard) {
+            _focusWritingInput();
+          }
         }
       }
     } catch (e) {
@@ -320,10 +340,29 @@ class _SessionPageState extends State<SessionPage>
     }
   }
 
+  void _focusWritingInput() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _focusNode.canRequestFocus) {
+        _focusNode.requestFocus();
+      }
+    });
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (mounted && _focusNode.canRequestFocus) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
   void _nextQuestion() {
     if (!mounted) return;
 
     if (_currentIndex < _questions.length - 1) {
+      final oldFocusNode = _focusNode;
+      _focusNode = FocusNode();
+      Future.delayed(const Duration(milliseconds: 400), () {
+        oldFocusNode.dispose();
+      });
+
       setState(() {
         _currentIndex++;
         _showFeedback = false;
@@ -337,13 +376,8 @@ class _SessionPageState extends State<SessionPage>
       final next = _questions[_currentIndex];
       _speakCurrentQuestion(next);
 
-      if (next.type == ExerciseType.trToEnWriting ||
-          next.type == ExerciseType.clozeWriting ||
-          next.type == ExerciseType.hintedWriting ||
-          next.type == ExerciseType.listeningWriting) {
-        Future.delayed(const Duration(milliseconds: 150), () {
-          if (mounted) _focusNode.requestFocus();
-        });
+      if (next.type != ExerciseType.flashcard) {
+        _focusWritingInput();
       }
     } else {
       _finishPart();
@@ -362,10 +396,34 @@ class _SessionPageState extends State<SessionPage>
           widget.day, wrongWordIds);
     }
 
-    await SpacedRepetitionService.markPartCompleted(widget.day, widget.part);
+    await SpacedRepetitionService.markPartCompleted(
+      widget.day,
+      widget.part,
+      reviewCount: widget.part == SessionPart.review ? _newWords.length : null,
+    );
+
+    bool skipPart3 = false;
+    if (widget.part == SessionPart.deepening) {
+      final reviewWords =
+          await SpacedRepetitionService.getReviewWordsForDay(widget.day);
+      if (reviewWords.isEmpty) {
+        await SpacedRepetitionService.markPartCompleted(
+          widget.day,
+          SessionPart.review,
+          reviewCount: 0,
+        );
+        skipPart3 = true;
+      }
+    }
+
     SoundService.playFinish();
 
-    if (mounted) setState(() => _isPartFinished = true);
+    if (mounted) {
+      setState(() {
+        _noReviewForPart3 = skipPart3;
+        _isPartFinished = true;
+      });
+    }
   }
 
   // ─── Flashcard Aksiyonu ───────────────────────────────────────────────────
@@ -585,9 +643,6 @@ class _SessionPageState extends State<SessionPage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _partBadge(q.part),
-          const SizedBox(height: 24),
-
           // İngilizce kelime + TTS butonu
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -699,8 +754,6 @@ class _SessionPageState extends State<SessionPage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _partBadge(q.part),
-          const SizedBox(height: 20),
           const Text(
             'İngilizcesini yazın',
             style: TextStyle(color: Colors.white54, fontSize: 13),
@@ -734,8 +787,6 @@ class _SessionPageState extends State<SessionPage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _partBadge(q.part),
-          const SizedBox(height: 20),
           const Text(
             'Türkçe anlamını yazın',
             style: TextStyle(color: Colors.white54, fontSize: 13),
@@ -787,8 +838,6 @@ class _SessionPageState extends State<SessionPage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _partBadge(q.part),
-          const SizedBox(height: 20),
           const Text(
             'Boşluğu doldurun',
             style: TextStyle(color: Colors.white54, fontSize: 13),
@@ -850,9 +899,6 @@ class _SessionPageState extends State<SessionPage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _partBadge(q.part),
-          const SizedBox(height: 28),
-
           // Büyük hoparlör ikonu
           GestureDetector(
             onTap: _listenCount < _maxListenCount
@@ -921,8 +967,6 @@ class _SessionPageState extends State<SessionPage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _partBadge(q.part),
-          const SizedBox(height: 20),
           const Text(
             'İngilizcesini yazın',
             style: TextStyle(color: Colors.white54, fontSize: 13),
@@ -964,6 +1008,7 @@ class _SessionPageState extends State<SessionPage>
         TextField(
           controller: _textController,
           focusNode: _focusNode,
+          autofocus: true,
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Colors.white,
@@ -1187,7 +1232,7 @@ class _SessionPageState extends State<SessionPage>
     };
     final nextPartLabels = {
       SessionPart.introduction: 'Part 2\'ye Geç',
-      SessionPart.deepening: 'Part 3\'e Geç',
+      SessionPart.deepening: _noReviewForPart3 ? 'Ana Sayfaya Dön' : 'Part 3\'e Geç',
       SessionPart.review: 'Ana Sayfaya Dön',
       SessionPart.bonus: 'Ana Sayfaya Dön',
     };
@@ -1240,10 +1285,40 @@ class _SessionPageState extends State<SessionPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${_newWords.length} kelime üzerinde çalışıldı',
+                    _newWords.isEmpty
+                        ? 'Bugün için tekrar edilecek kelime bulunmuyor.'
+                        : '${_newWords.length} kelime üzerinde çalışıldı',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white60, fontSize: 15),
                   ),
+                  if (_noReviewForPart3) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00E676).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: const Color(0xFF00E676).withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle_rounded,
+                              color: Color(0xFF00E676), size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'Bugün tekrar kelimesi olmadığı için Part 3 tamamlandı.',
+                            style: TextStyle(
+                              color: Color(0xFF00E676),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 28),
 
                   // İstatistik
@@ -1284,7 +1359,8 @@ class _SessionPageState extends State<SessionPage>
                     child: ElevatedButton(
                       onPressed: () {
                         if (widget.part == SessionPart.review ||
-                            widget.part == SessionPart.bonus) {
+                            widget.part == SessionPart.bonus ||
+                            _noReviewForPart3) {
                           Navigator.of(context).pop();
                         } else {
                           // Sonraki part'a geç
@@ -1367,36 +1443,6 @@ class _SessionPageState extends State<SessionPage>
     );
   }
 
-  Widget _partBadge(SessionPart part) {
-    final labels = {
-      SessionPart.introduction: 'Part 1 • Tanıtım',
-      SessionPart.deepening: 'Part 2 • Derinleştirme',
-      SessionPart.review: 'Part 3 • Tekrar',
-      SessionPart.bonus: 'Bonus • Zor Kelimeler',
-    };
-    final colors = {
-      SessionPart.introduction: const Color(0xFF3A86FF),
-      SessionPart.deepening: const Color(0xFF7209B7),
-      SessionPart.review: const Color(0xFF00E676),
-      SessionPart.bonus: const Color(0xFFFFB703),
-    };
-    final label = labels[part] ?? '';
-    final color = colors[part] ?? const Color(0xFF3A86FF);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.13),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-            color: color, fontSize: 12, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
 
   Widget _ttsButton(String text) {
     return GestureDetector(

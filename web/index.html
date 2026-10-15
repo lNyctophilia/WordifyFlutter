@@ -202,12 +202,15 @@
 
       let currentTtsAudio = null;
       let cachedEnglishVoice = null;
+      let currentSpeechSessionId = 0;
+      let webSpeechTimeout = null;
 
       function findEnglishVoice() {
         if (!('speechSynthesis' in window)) return null;
         const voices = window.speechSynthesis.getVoices() || [];
         if (!voices || voices.length === 0) return null;
 
+        // Her zaman en tutarlı ve doğal İngilizce kadın sesini seç
         return voices.find(function(v) {
           const name = (v.name || '').toLowerCase();
           const lang = (v.lang || '').toLowerCase();
@@ -215,18 +218,13 @@
         }) || voices.find(function(v) {
           const name = (v.name || '').toLowerCase();
           const lang = (v.lang || '').toLowerCase();
-          return (name.includes('samantha') || name.includes('daniel') || name.includes('karen') || name.includes('natural') || name.includes('serena') || name.includes('oliver')) && lang.startsWith('en');
-        }) || voices.find(function(v) {
-          const lang = (v.lang || '').replace('_', '-').toLowerCase();
-          return lang === 'en-us' && !v.localService;
+          return (name.includes('samantha') || name.includes('zira') || name.includes('natural')) && lang.startsWith('en');
         }) || voices.find(function(v) {
           const lang = (v.lang || '').replace('_', '-').toLowerCase();
           return lang === 'en-us';
         }) || voices.find(function(v) {
           const lang = (v.lang || '').replace('_', '-').toLowerCase();
-          return lang === 'en-gb';
-        }) || voices.find(function(v) {
-          return (v.lang || '').toLowerCase().startsWith('en');
+          return lang.startsWith('en');
         }) || null;
       }
 
@@ -242,7 +240,8 @@
         updateCachedVoice();
       }
 
-      function speakWithWebSpeech(cleanText, retryCount) {
+      function speakWithWebSpeech(cleanText, retryCount, sessionId) {
+        if (sessionId !== undefined && sessionId !== currentSpeechSessionId) return;
         if (!('speechSynthesis' in window)) return;
         const synth = window.speechSynthesis;
         retryCount = retryCount || 0;
@@ -253,8 +252,8 @@
 
           const enVoice = cachedEnglishVoice || findEnglishVoice();
           if (!enVoice && retryCount < 6) {
-            setTimeout(function() {
-              speakWithWebSpeech(cleanText, retryCount + 1);
+            webSpeechTimeout = setTimeout(function() {
+              speakWithWebSpeech(cleanText, retryCount + 1, sessionId);
             }, 50);
             return;
           }
@@ -270,8 +269,9 @@
             cachedEnglishVoice = enVoice;
           }
 
-          setTimeout(function() {
+          webSpeechTimeout = setTimeout(function() {
             try {
+              if (sessionId !== undefined && sessionId !== currentSpeechSessionId) return;
               if (synth.paused) synth.resume();
               synth.speak(utterance);
             } catch (err) {
@@ -338,70 +338,66 @@
             const cleanText = text.trim();
 
             WordifyAudio.stopSpeech();
+            const sessionId = currentSpeechSessionId;
 
-            // Word count determines if dictionary studio voice or Google TTS is better
-            const wordCount = cleanText.split(/\s+/).length;
-            const isSingleWord = wordCount <= 3;
+            // Tüm kelime ve cümleleri tek tip, aynı seslendirmen seslendirir (Google US English TTS)
+            const targetUrl = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=' + encodeURIComponent(cleanText);
+            const audio = new Audio();
+            audio.referrerPolicy = 'no-referrer';
+            audio.preload = 'auto';
+            currentTtsAudio = audio;
 
-            // Sources in priority:
-            // 1) For words/short phrases: Youdao American Studio Audio (Type 2 = American accent)
-            // 2) Google Translate US TTS Audio (tl=en with no-referrer)
-            // 3) Web Speech API strictly in English
-            const audioUrls = [];
-            if (isSingleWord) {
-              audioUrls.push('https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(cleanText) + '&type=2');
-            }
-            audioUrls.push('https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=' + encodeURIComponent(cleanText));
-
-            let urlIndex = 0;
-            function playNext() {
-              if (urlIndex >= audioUrls.length) {
-                speakWithWebSpeech(cleanText);
-                return;
+            let fallbackTriggered = false;
+            function triggerFallback() {
+              if (fallbackTriggered) return;
+              fallbackTriggered = true;
+              if (sessionId !== currentSpeechSessionId) return;
+              if (currentTtsAudio === audio) {
+                currentTtsAudio = null;
               }
-
-              const targetUrl = audioUrls[urlIndex++];
-              const audio = new Audio();
-              audio.referrerPolicy = 'no-referrer';
-              audio.preload = 'auto';
-              currentTtsAudio = audio;
-
-              let nextTriggered = false;
-              function triggerNext() {
-                if (nextTriggered) return;
-                nextTriggered = true;
-                if (currentTtsAudio === audio) {
-                  currentTtsAudio = null;
-                }
-                playNext();
-              }
-
-              audio.onerror = function() {
-                triggerNext();
-              };
-
-              audio.src = targetUrl;
-              const playPromise = audio.play();
-              if (playPromise !== undefined) {
-                playPromise.catch(function(err) {
-                  console.warn('Audio play failed for ' + targetUrl + ':', err);
-                  triggerNext();
-                });
-              }
+              speakWithWebSpeech(cleanText, 0, sessionId);
             }
 
-            playNext();
+            audio.onended = function() {
+              if (currentTtsAudio === audio) {
+                currentTtsAudio = null;
+              }
+            };
+
+            audio.onerror = function() {
+              if (sessionId !== currentSpeechSessionId) return;
+              triggerFallback();
+            };
+
+            audio.src = targetUrl;
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(function(err) {
+                if (sessionId !== currentSpeechSessionId) return;
+                console.warn('Audio play failed, falling back to Web Speech:', err);
+                triggerFallback();
+              });
+            }
           } catch (e) {
             console.warn('speak error:', e);
-            speakWithWebSpeech(text.trim());
+            speakWithWebSpeech(text.trim(), 0, currentSpeechSessionId);
           }
         },
         stopSpeech: function() {
           try {
+            currentSpeechSessionId++;
+            if (webSpeechTimeout) {
+              clearTimeout(webSpeechTimeout);
+              webSpeechTimeout = null;
+            }
             if (currentTtsAudio) {
-              currentTtsAudio.pause();
-              currentTtsAudio.currentTime = 0;
+              const prevAudio = currentTtsAudio;
               currentTtsAudio = null;
+              prevAudio.onended = null;
+              prevAudio.onerror = null;
+              prevAudio.pause();
+              prevAudio.removeAttribute('src');
+              prevAudio.load();
             }
             if ('speechSynthesis' in window) {
               window.speechSynthesis.cancel();
@@ -435,7 +431,7 @@
   </script>
   <script>
     (function() {
-      const BUILD_VERSION = '15.10.2026-13.09';
+      const BUILD_VERSION = '16.10.2026-01.33';
       const urlParams = new URLSearchParams(window.location.search);
       const v = urlParams.get('t') || BUILD_VERSION;
       const script = document.createElement('script');

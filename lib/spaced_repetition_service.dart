@@ -77,6 +77,8 @@ class DayPartProgress {
   final bool bonusNeeded;
   final bool bonusCompleted;
   final List<String> wrongWordsInSession;
+  final int currentPart;
+  final int reviewCount;
 
   const DayPartProgress({
     this.part1Completed = false,
@@ -85,9 +87,14 @@ class DayPartProgress {
     this.bonusNeeded = false,
     this.bonusCompleted = false,
     this.wrongWordsInSession = const [],
+    this.currentPart = 1,
+    this.reviewCount = 0,
   });
 
   factory DayPartProgress.fromMap(Map<String, dynamic> data) {
+    final int inferredPart = data['part2_completed'] == true
+        ? (data['part3_completed'] == true ? 4 : 3)
+        : (data['part1_completed'] == true ? 2 : 1);
     return DayPartProgress(
       part1Completed: data['part1_completed'] ?? false,
       part2Completed: data['part2_completed'] ?? false,
@@ -95,6 +102,8 @@ class DayPartProgress {
       bonusNeeded: data['bonus_needed'] ?? false,
       bonusCompleted: data['bonus_completed'] ?? false,
       wrongWordsInSession: List<String>.from(data['wrong_words_in_session'] ?? []),
+      currentPart: (data['current_part'] ?? data['currentPart'] as num?)?.toInt() ?? inferredPart,
+      reviewCount: (data['review_count'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -106,21 +115,34 @@ class DayPartProgress {
       'bonus_needed': bonusNeeded,
       'bonus_completed': bonusCompleted,
       'wrong_words_in_session': wrongWordsInSession,
+      'current_part': currentPart,
+      'currentPart': currentPart,
+      'review_count': reviewCount,
     };
   }
 
-  bool get allDone => part1Completed && part2Completed && part3Completed &&
+  bool isPart3Complete({bool hasNoReviewWords = false}) =>
+      part3Completed || hasNoReviewWords;
+
+  bool isAllDone({bool hasNoReviewWords = false}) =>
+      part1Completed &&
+      part2Completed &&
+      (part3Completed || hasNoReviewWords) &&
       (!bonusNeeded || bonusCompleted);
+
+  bool get allDone => isAllDone();
 
   /// Tamamlanmamış ilk Part indeksini döndürür (0-based).
   /// Null: tüm part'lar bitti.
-  int? get nextPartIndex {
+  int? getNextPartIndex({bool hasNoReviewWords = false}) {
     if (!part1Completed) return 0;
     if (!part2Completed) return 1;
-    if (!part3Completed) return 2;
+    if (!part3Completed && !hasNoReviewWords) return 2;
     if (bonusNeeded && !bonusCompleted) return 3;
     return null;
   }
+
+  int? get nextPartIndex => getNextPartIndex();
 }
 
 class SpacedRepetitionService {
@@ -243,8 +265,14 @@ class SpacedRepetitionService {
           (data['current_day'] ?? data['currentDay'] as num?)?.toInt();
       if (dbDay != null && dbDay > _cachedDay) _cachedDay = dbDay;
 
+      final currentPart =
+          (data['current_part'] ?? data['currentPart'] as num?)?.toInt() ?? 1;
+
       return {
         'current_day': _cachedDay,
+        'currentDay': _cachedDay,
+        'current_part': currentPart,
+        'currentPart': currentPart,
         'streak': streak,
         'weekly_activity': activity,
       };
@@ -344,6 +372,8 @@ class SpacedRepetitionService {
         await doc.set({
           'current_day': safeDay,
           'currentDay': safeDay,
+          'current_part': 1,
+          'currentPart': 1,
         }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('setCurrentDay error: $e');
@@ -451,28 +481,97 @@ class SpacedRepetitionService {
     });
   }
 
-  static Future<void> markPartCompleted(int day, SessionPart part) async {
+  static int sessionPartToNumber(SessionPart part) {
+    switch (part) {
+      case SessionPart.introduction:
+        return 1;
+      case SessionPart.deepening:
+        return 2;
+      case SessionPart.review:
+        return 3;
+      case SessionPart.bonus:
+        return 4;
+    }
+  }
+
+  static Future<void> setCurrentPart(int day, SessionPart part) async {
+    final partNum = sessionPartToNumber(part);
+    final userDocRef = _userDoc();
+    final col = _dayProgressCollection();
+
+    try {
+      if (userDocRef != null) {
+        await userDocRef.set({
+          'current_day': day,
+          'currentDay': day,
+          'current_part': partNum,
+          'currentPart': partNum,
+          'current_part_name': part.name,
+          'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      if (col != null) {
+        await col.doc('day_$day').set({
+          'current_part': partNum,
+          'currentPart': partNum,
+          'current_part_name': part.name,
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('setCurrentPart error: $e');
+    }
+  }
+
+  static Future<void> markPartCompleted(
+    int day,
+    SessionPart part, {
+    int? reviewCount,
+  }) async {
     final col = _dayProgressCollection();
     if (col == null) return;
 
     final Map<String, dynamic> update = {};
+    int nextPartNum = 1;
     switch (part) {
       case SessionPart.introduction:
         update['part1_completed'] = true;
+        nextPartNum = 2;
         break;
       case SessionPart.deepening:
         update['part2_completed'] = true;
+        nextPartNum = 3;
         break;
       case SessionPart.review:
         update['part3_completed'] = true;
+        nextPartNum = 4;
+        if (reviewCount != null) {
+          update['review_count'] = reviewCount;
+        }
         break;
       case SessionPart.bonus:
         update['bonus_completed'] = true;
+        nextPartNum = 4;
         break;
     }
 
+    update['current_part'] = nextPartNum;
+    update['currentPart'] = nextPartNum;
+    update['updated_at'] = FieldValue.serverTimestamp();
+
     try {
       await col.doc('day_$day').set(update, SetOptions(merge: true));
+      final userDocRef = _userDoc();
+      if (userDocRef != null) {
+        await userDocRef.set({
+          'current_day': day,
+          'currentDay': day,
+          'current_part': nextPartNum,
+          'currentPart': nextPartNum,
+          'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
     } catch (e) {
       debugPrint('markPartCompleted error: $e');
     }
@@ -687,6 +786,8 @@ class SpacedRepetitionService {
       'last_word_index': 0,
       'current_day': 1,
       'currentDay': 1,
+      'current_part': 1,
+      'currentPart': 1,
     }, SetOptions(merge: true));
 
     await batch.commit();

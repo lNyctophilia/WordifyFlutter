@@ -79,6 +79,8 @@ class AuthService {
           'roles': ['staff'],
           'isApproved': false,
           'currentDay': 1,
+          'currentPart': 1,
+          'current_part': 1,
           'createdAt': FieldValue.serverTimestamp(),
           'lastLoginAt': FieldValue.serverTimestamp(),
         });

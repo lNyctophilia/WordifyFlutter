@@ -27,6 +27,7 @@ class TtsService {
   static Future<void> speak(String text) async {
     final clean = text.trim();
     if (clean.isEmpty) return;
+    await stop();
     if (bridgeSpeak(clean)) return;
 
     try {

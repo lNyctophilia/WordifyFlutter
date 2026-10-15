@@ -35,6 +35,28 @@ class ProgressService {
     });
   }
 
+  static Stream<int> get currentPartStream {
+    final ref = _userDocRef();
+    if (ref == null) {
+      return Stream.value(1);
+    }
+
+    return ref.snapshots().map((snapshot) {
+      if (!snapshot.exists || snapshot.data() == null) {
+        return 1;
+      }
+      final data = snapshot.data()!;
+      final part = data['currentPart'] ?? data['current_part'];
+      if (part is int && part > 0) {
+        return part;
+      }
+      return 1;
+    }).handleError((error) {
+      debugPrint('Firestore part progress stream error: $error');
+      return 1;
+    });
+  }
+
   static Future<void> updateCurrentDay(int day) async {
     final ref = _userDocRef();
     if (ref == null) return;
@@ -42,10 +64,26 @@ class ProgressService {
     try {
       await ref.set({
         'currentDay': day,
+        'current_day': day,
         'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Firestore progress update error: $e');
+    }
+  }
+
+  static Future<void> updateCurrentPart(int part) async {
+    final ref = _userDocRef();
+    if (ref == null) return;
+
+    try {
+      await ref.set({
+        'currentPart': part,
+        'current_part': part,
+        'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Firestore part update error: $e');
     }
   }
 }

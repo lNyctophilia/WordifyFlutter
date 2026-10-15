@@ -186,9 +186,6 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
           stream: SpacedRepetitionService.getStatsStreamForDay(activeDay),
           builder: (context, snapshot) {
             final stats = snapshot.data ?? {'new': 0, 'review': 0, 'total_learned': 0};
-            const int newWordsGoal = SpacedRepetitionService.newWordsPerDay;
-            const int reviewGoal = 20;
-            
             final int newDue = stats['new'] ?? 0;
             final int reviewDue = stats['review'] ?? 0;
             final int totalLearned = stats['total_learned'] ?? 0;
@@ -196,10 +193,9 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
 
             final bool hasStarted = totalWords > 0;
 
+            const int newWordsGoal = SpacedRepetitionService.newWordsPerDay;
             final int newDone = hasStarted ? (newWordsGoal - newDue).clamp(0, newWordsGoal) : 0;
-            final int reviewDone = hasStarted ? (reviewGoal - reviewDue).clamp(0, reviewGoal) : 0;
             final int currentNewGoal = (newDone + newDue).clamp(newWordsGoal, 999);
-            final int currentReviewGoal = (reviewDone + reviewDue).clamp(reviewGoal, 999);
 
             return Scaffold(
               backgroundColor: const Color(0xFF0A1128),
@@ -341,8 +337,18 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                             stream: SpacedRepetitionService.getDayPartProgressStream(activeDay),
                             builder: (context, partSnap) {
                               final partProgress = partSnap.data ?? const DayPartProgress();
-                              final nextPartIdx = partProgress.nextPartIndex;
-                              final allDone = partProgress.allDone;
+                              final bool hasNoReview = reviewDue == 0;
+                              final bool isPart3Done =
+                                  partProgress.isPart3Complete(hasNoReviewWords: hasNoReview);
+                              final nextPartIdx =
+                                  partProgress.getNextPartIndex(hasNoReviewWords: hasNoReview);
+                              final allDone =
+                                  partProgress.isAllDone(hasNoReviewWords: hasNoReview);
+
+                              final int reviewDone =
+                                  isPart3Done ? partProgress.reviewCount : 0;
+                              final int currentReviewGoal =
+                                  isPart3Done ? partProgress.reviewCount : reviewDue;
 
                               // Başlatılacak Part
                               final parts = [
@@ -382,6 +388,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                     _buildPartStatusRow(
                                       partProgress: partProgress,
                                       bonusNeeded: partProgress.bonusNeeded,
+                                      isPart3Done: isPart3Done,
                                     ),
 
                                     const SizedBox(height: 24),
@@ -556,11 +563,12 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
   Widget _buildPartStatusRow({
     required DayPartProgress partProgress,
     required bool bonusNeeded,
+    bool isPart3Done = false,
   }) {
     final parts = [
       (label: 'P1', done: partProgress.part1Completed, color: const Color(0xFF3A86FF)),
       (label: 'P2', done: partProgress.part2Completed, color: const Color(0xFF7209B7)),
-      (label: 'P3', done: partProgress.part3Completed, color: const Color(0xFF00E676)),
+      (label: 'P3', done: isPart3Done, color: const Color(0xFF00E676)),
       if (bonusNeeded)
         (label: 'Bonus', done: partProgress.bonusCompleted, color: const Color(0xFFFFB703)),
     ];
