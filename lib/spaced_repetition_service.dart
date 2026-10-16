@@ -426,6 +426,9 @@ class SpacedRepetitionService {
   /// Günlük 5 yeni kelime (eski 10'dan değiştirildi).
   static const int newWordsPerDay = 5;
 
+  /// Günlük maksimum tekrar kelime sayısı.
+  static const int maxReviewsPerDay = 20;
+
   static Future<void> initMockDataIfEmpty() async {
     await loadDictionaryIfNeeded();
     final currentDay = await getCurrentDay();
@@ -889,7 +892,7 @@ class SpacedRepetitionService {
 
     // Step'e göre sırala (düşük step → daha fazla tekrar ihtiyacı)
     reviewWords.sort((a, b) => a.step.compareTo(b.step));
-    return reviewWords.take(20).toList();
+    return reviewWords.take(maxReviewsPerDay).toList();
   }
 
   /// Eski `getSessionForDay` — geriye dönük uyumluluk için korunur.
@@ -914,7 +917,7 @@ class SpacedRepetitionService {
     }
 
     newWords = newWords.take(newWordsPerDay).toList();
-    reviewWords = reviewWords.take(20).toList();
+    reviewWords = reviewWords.take(maxReviewsPerDay).toList();
 
     final allWords = [...newWords, ...reviewWords];
     allWords.shuffle();
@@ -1011,8 +1014,8 @@ class SpacedRepetitionService {
       }
 
       return {
-        'new': newDue,
-        'review': reviewDue,
+        'new': math.min(newDue, newWordsPerDay),
+        'review': math.min(reviewDue, maxReviewsPerDay),
         'total_learned': totalLearned,
         'total_words': totalWords,
       };
@@ -1029,31 +1032,52 @@ class SpacedRepetitionService {
     final wordsCol = userDoc.collection('words');
     final progressCol = userDoc.collection('day_progress');
 
-    final wordSnap = await wordsCol.get();
-    final progressSnap = await progressCol.get();
-
-    final List<DocumentReference> refsToDelete = [
-      ...wordSnap.docs.map((d) => d.reference),
-      ...progressSnap.docs.map((d) => d.reference),
-    ];
-
-    const int chunkSize = 400;
-    for (int i = 0; i < refsToDelete.length; i += chunkSize) {
-      final chunk = refsToDelete.sublist(
-        i,
-        math.min(i + chunkSize, refsToDelete.length),
-      );
-      final batch = _firestore.batch();
-      for (final ref in chunk) {
-        batch.delete(ref);
+    // 1. Kelime dokümanlarını sil
+    try {
+      final wordSnap = await wordsCol.get();
+      const int chunkSize = 400;
+      for (int i = 0; i < wordSnap.docs.length; i += chunkSize) {
+        final chunk = wordSnap.docs.sublist(
+          i,
+          math.min(i + chunkSize, wordSnap.docs.length),
+        );
+        final batch = _firestore.batch();
+        for (final doc in chunk) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
       }
-      await batch.commit();
+    } catch (e) {
+      debugPrint('wordsCol reset error: $e');
+    }
+
+    // 2. Gün ilerleme alt koleksiyonunu sil (izin yoksa bile akışı bozmaz)
+    try {
+      final progressSnap = await progressCol.get();
+      const int chunkSize = 400;
+      for (int i = 0; i < progressSnap.docs.length; i += chunkSize) {
+        final chunk = progressSnap.docs.sublist(
+          i,
+          math.min(i + chunkSize, progressSnap.docs.length),
+        );
+        final batch = _firestore.batch();
+        for (final doc in chunk) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint('progressCol reset error: $e');
     }
 
     _cachedDay = 1;
     _dayProgressCache.clear();
 
-    final userSnap = await userDoc.get();
+    DocumentSnapshot<Map<String, dynamic>>? userSnap;
+    try {
+      userSnap = await userDoc.get();
+    } catch (_) {}
+
     final Map<String, dynamic> resetPayload = {
       'last_word_index': 0,
       'current_day': 1,
@@ -1068,12 +1092,20 @@ class SpacedRepetitionService {
       'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
     };
 
-    if (userSnap.exists && userSnap.data() != null) {
+    if (userSnap != null && userSnap.exists && userSnap.data() != null) {
       for (final key in userSnap.data()!.keys) {
         if (key.startsWith('day_') && key.endsWith('_progress')) {
           resetPayload[key] = FieldValue.delete();
         }
       }
+    } else {
+      // Eğer doküman henüz yoksa create kurallarını karşılayacak alanları ekle
+      resetPayload['uid'] = uid;
+      resetPayload['email'] = _auth.currentUser?.email ?? '';
+      resetPayload['displayName'] = _auth.currentUser?.displayName ?? '';
+      resetPayload['roles'] = ['staff'];
+      resetPayload['isApproved'] = false;
+      resetPayload['createdAt'] = FieldValue.serverTimestamp();
     }
 
     await userDoc.set(resetPayload, SetOptions(merge: true));

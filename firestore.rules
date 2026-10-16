@@ -7,7 +7,11 @@ service cloud.firestore {
     }
 
     function hasRole(role) {
-      return request.auth != null && role in getUserData().roles;
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        'roles' in getUserData() && 
+        getUserData().roles is list && 
+        role in getUserData().roles;
     }
 
     function isOwner() {
@@ -31,11 +35,14 @@ service cloud.firestore {
 
       // Güncelleme: Admin herkesi, kullanıcı ise kendi profil ve öğrenme verilerini güncelleyebilir (roller ve onay hariç)
       allow update: if request.auth != null && (
-        isAdmin() || 
         (
           request.auth.uid == userId && 
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles', 'isApproved'])
-        )
+          (
+            !('roles' in resource.data) || 
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles', 'isApproved'])
+          )
+        ) ||
+        isAdmin()
       );
 
       // Sadece admin silebilir

@@ -251,17 +251,11 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
         return StreamBuilder<Map<String, int>>(
           stream: SpacedRepetitionService.getStatsStreamForDay(activeDay),
           builder: (context, snapshot) {
-            final stats = snapshot.data ?? {'new': 0, 'review': 0, 'total_learned': 0};
-            final int newDue = stats['new'] ?? 0;
+            final stats = snapshot.data ?? {'review': 0, 'total_learned': 0};
             final int reviewDue = stats['review'] ?? 0;
             final int totalLearned = stats['total_learned'] ?? 0;
-            final int totalWords = stats['total_words'] ?? 0;
 
-            final bool hasStarted = totalWords > 0;
-
-            const int newWordsGoal = SpacedRepetitionService.newWordsPerDay;
-            final int newDone = hasStarted ? (newWordsGoal - newDue).clamp(0, newWordsGoal) : 0;
-            final int currentNewGoal = (newDone + newDue).clamp(newWordsGoal, 999);
+            const int currentNewGoal = SpacedRepetitionService.newWordsPerDay;
 
             return Scaffold(
               backgroundColor: const Color(0xFF0A1128),
@@ -411,10 +405,24 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                               final allDone =
                                   partProgress.isAllDone(hasNoReviewWords: hasNoReview);
 
-                              final int reviewDone =
-                                  isPart3Done ? partProgress.reviewCount : 0;
-                              final int currentReviewGoal =
-                                  isPart3Done ? partProgress.reviewCount : reviewDue;
+                              final bool isNewWordsDone =
+                                  partProgress.part1Completed && partProgress.part2Completed;
+                              final int newDone = isNewWordsDone
+                                  ? currentNewGoal
+                                  : (partProgress.part1Completed
+                                      ? (currentNewGoal / 2).ceil()
+                                      : 0);
+
+                              final int targetReviewGoal = isPart3Done
+                                  ? (partProgress.reviewCount > 0
+                                      ? partProgress.reviewCount
+                                      : reviewDue)
+                                  : reviewDue;
+                              final int currentReviewGoal = targetReviewGoal
+                                  .clamp(0, SpacedRepetitionService.maxReviewsPerDay);
+                              final int reviewDone = isPart3Done
+                                  ? currentReviewGoal
+                                  : 0;
 
                               // Başlatılacak Part
                               final parts = [
@@ -466,6 +474,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                       total: currentNewGoal,
                                       color: const Color(0xFF3A86FF),
                                       icon: Icons.auto_awesome_rounded,
+                                      isCompleted: isNewWordsDone,
                                     ),
                                     const SizedBox(height: 16),
                                     _buildProgressBar(
@@ -474,6 +483,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                       total: currentReviewGoal,
                                       color: const Color(0xFF00E676),
                                       icon: Icons.refresh_rounded,
+                                      isCompleted: isPart3Done,
                                     ),
 
                                     const SizedBox(height: 32),
@@ -518,7 +528,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                           children: [
                                             Text(
                                               allDone
-                                                  ? '✅ Eğitimi Tekrarla'
+                                                  ? 'Eğitimi Tekrarla'
                                                   : nextPartIdx == 0
                                                       ? 'Eğitime Başla'
                                                       : 'Devam Et',
@@ -717,9 +727,14 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     required int total,
     required Color color,
     required IconData icon,
+    bool isCompleted = false,
   }) {
-    final progress = total > 0 ? current / total : 0.0;
-    
+    final bool completed =
+        isCompleted || total == 0 || (total > 0 && current >= total);
+    final double progress = completed
+        ? 1.0
+        : (total > 0 ? (current / total).clamp(0.0, 1.0) : 0.0);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -740,13 +755,26 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                 ),
               ],
             ),
-            Text(
-              '$current / $total',
-              style: TextStyle(
-                color: color,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$current / $total',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (completed) ...[
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: color,
+                    size: 16,
+                  ),
+                ],
+              ],
             ),
           ],
         ),

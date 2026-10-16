@@ -1230,16 +1230,20 @@ class _SessionPageState extends State<SessionPage>
       SessionPart.review: const Color(0xFF00E676),
       SessionPart.bonus: const Color(0xFFFFB703),
     };
+    final bool hasNextPart = !(widget.part == SessionPart.review ||
+        widget.part == SessionPart.bonus ||
+        _noReviewForPart3);
+
     final nextPartLabels = {
       SessionPart.introduction: 'Part 2\'ye Geç',
-      SessionPart.deepening: _noReviewForPart3 ? 'Ana Sayfaya Dön' : 'Part 3\'e Geç',
-      SessionPart.review: 'Ana Sayfaya Dön',
-      SessionPart.bonus: 'Ana Sayfaya Dön',
+      SessionPart.deepening: _noReviewForPart3 ? 'Ana Menüye Dön' : 'Part 3\'e Geç',
+      SessionPart.review: 'Ana Menüye Dön',
+      SessionPart.bonus: 'Ana Menüye Dön',
     };
 
     final title = partLabels[widget.part] ?? 'Tamamlandı!';
     final color = partColors[widget.part] ?? const Color(0xFF3A86FF);
-    final nextLabel = nextPartLabels[widget.part] ?? 'Ana Sayfaya Dön';
+    final nextLabel = nextPartLabels[widget.part] ?? 'Ana Menüye Dön';
     final accuracy = _totalAnswered > 0
         ? ((_correctCount / _totalAnswered) * 100).round()
         : 100;
@@ -1358,9 +1362,7 @@ class _SessionPageState extends State<SessionPage>
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
-                        if (widget.part == SessionPart.review ||
-                            widget.part == SessionPart.bonus ||
-                            _noReviewForPart3) {
+                        if (!hasNextPart) {
                           Navigator.of(context).pop();
                         } else {
                           // Sonraki part'a geç
@@ -1391,23 +1393,25 @@ class _SessionPageState extends State<SessionPage>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white60,
-                        side: const BorderSide(color: Color(0xFF1E2D4A)),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                  if (hasNextPart) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white60,
+                          side: const BorderSide(color: Color(0xFF1E2D4A)),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: const Text('Ana Menüye Dön',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w600)),
                       ),
-                      child: const Text('Ana Sayfaya Dön',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w600)),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
