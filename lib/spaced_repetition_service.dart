@@ -300,8 +300,8 @@ class SpacedRepetitionService {
         }
       }
 
-      final dbDay =
-          (data['current_day'] ?? data['currentDay'] as num?)?.toInt();
+      final dbDay = (data['current_day'] as num?)?.toInt() ??
+          (data['currentDay'] as num?)?.toInt();
       if (dbDay != null) _cachedDay = dbDay;
 
       final currentPart =
@@ -375,9 +375,9 @@ class SpacedRepetitionService {
     final doc = _userDoc();
     if (doc == null) return Stream.value({'current_day': _cachedDay});
     return doc.snapshots().map((snapshot) {
-      final dbDay = (snapshot.data()?['current_day'] ??
-              snapshot.data()?['currentDay'] as num?)
-          ?.toInt();
+      final data = snapshot.data();
+      final dbDay = (data?['current_day'] as num?)?.toInt() ??
+          (data?['currentDay'] as num?)?.toInt();
       if (dbDay != null) _cachedDay = dbDay;
       return {'current_day': _cachedDay};
     });
@@ -392,9 +392,9 @@ class SpacedRepetitionService {
     if (doc == null) return _cachedDay;
     try {
       final snap = await doc.get();
-      final dbDay = (snap.data()?['current_day'] ??
-              snap.data()?['currentDay'] as num?)
-          ?.toInt();
+      final data = snap.data();
+      final dbDay = (data?['current_day'] as num?)?.toInt() ??
+          (data?['currentDay'] as num?)?.toInt();
       if (dbDay != null) _cachedDay = dbDay;
     } catch (e) {
       debugPrint('getCurrentDay error: $e');
@@ -411,8 +411,7 @@ class SpacedRepetitionService {
         await doc.set({
           'current_day': safeDay,
           'currentDay': safeDay,
-          'current_part': 1,
-          'currentPart': 1,
+          'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('setCurrentDay error: $e');

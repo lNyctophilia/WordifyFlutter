@@ -143,11 +143,29 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
   int? _lastDbDay;
   int _currentActiveDay = 1;
   VoidCallback? _latestStartAction;
+  late final AppLifecycleListener _lifecycleListener;
 
   @override
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+    _lifecycleListener = AppLifecycleListener(
+      onPause: () {
+        if (_selectedDay != null) {
+          SpacedRepetitionService.setCurrentDay(_selectedDay!);
+        }
+      },
+      onDetach: () {
+        if (_selectedDay != null) {
+          SpacedRepetitionService.setCurrentDay(_selectedDay!);
+        }
+      },
+      onHide: () {
+        if (_selectedDay != null) {
+          SpacedRepetitionService.setCurrentDay(_selectedDay!);
+        }
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateService.checkForUpdates(context);
       SpacedRepetitionService.initMockDataIfEmpty();
@@ -156,6 +174,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
 
   @override
   void dispose() {
+    _lifecycleListener.dispose();
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     super.dispose();
   }
@@ -168,13 +187,19 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       if (_currentActiveDay > 1) {
         final prev = _currentActiveDay - 1;
-        setState(() => _selectedDay = prev);
+        setState(() {
+          _selectedDay = prev;
+          _lastDbDay = prev;
+        });
         SpacedRepetitionService.setCurrentDay(prev);
         return true;
       }
     } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
       final next = _currentActiveDay + 1;
-      setState(() => _selectedDay = next);
+      setState(() {
+        _selectedDay = next;
+        _lastDbDay = next;
+      });
       SpacedRepetitionService.setCurrentDay(next);
       return true;
     } else if (event.logicalKey == LogicalKeyboardKey.enter ||
@@ -194,6 +219,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
       final currentDay = await SpacedRepetitionService.getCurrentDay();
       setState(() {
         _selectedDay = currentDay;
+        _lastDbDay = currentDay;
       });
     }
   }
@@ -283,9 +309,24 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     return StreamBuilder<Map<String, dynamic>>(
       stream: SpacedRepetitionService.getUserProfileStream(),
       builder: (context, profileSnapshot) {
+        if (!profileSnapshot.hasData && _selectedDay == null) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF0A1128),
+            body: Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFF3A86FF),
+              ),
+            ),
+          );
+        }
+
         final profile = profileSnapshot.data ?? {};
-        final dbDay = (profile['current_day'] as num?)?.toInt() ?? 1;
-        if (_selectedDay == null || (_lastDbDay != null && dbDay < _lastDbDay!)) {
+        final dbDay = (profile['current_day'] as num?)?.toInt() ??
+            (profile['currentDay'] as num?)?.toInt() ??
+            _selectedDay ??
+            1;
+
+        if (_selectedDay == null || (_lastDbDay != null && _lastDbDay != dbDay)) {
           _selectedDay = dbDay;
         }
         _lastDbDay = dbDay;
@@ -401,7 +442,10 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                   onPressed: activeDay > 1
                                       ? () {
                                           final prev = activeDay - 1;
-                                          setState(() => _selectedDay = prev);
+                                          setState(() {
+                                            _selectedDay = prev;
+                                            _lastDbDay = prev;
+                                          });
                                           SpacedRepetitionService.setCurrentDay(prev);
                                         }
                                       : null,
@@ -433,7 +477,10 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                   tooltip: 'Sonraki Gün',
                                   onPressed: () {
                                     final next = activeDay + 1;
-                                    setState(() => _selectedDay = next);
+                                    setState(() {
+                                      _selectedDay = next;
+                                      _lastDbDay = next;
+                                    });
                                     SpacedRepetitionService.setCurrentDay(next);
                                   },
                                 ),

@@ -153,9 +153,7 @@ class _SessionPageState extends State<SessionPage>
   FocusNode _focusNode = FocusNode();
   late AnimationController _shakeController;
   late AnimationController _correctController;
-
-  double get _correctProgress =>
-      _correctController.isAnimating ? sin(_correctController.value * pi).clamp(0.0, 1.0) : 0.0;
+  late Animation<double> _correctAnimation;
 
   // Dinleme modunda kelimeyi kaç kez dinledi
   int _listenCount = 0;
@@ -173,8 +171,24 @@ class _SessionPageState extends State<SessionPage>
     );
     _correctController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 550),
+      duration: const Duration(milliseconds: 750),
     );
+    _correctAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(1.0),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 30,
+      ),
+    ]).animate(_correctController);
     _loadPartQuestions();
   }
 
@@ -402,7 +416,7 @@ class _SessionPageState extends State<SessionPage>
         _selectedAnswer = answer;
       });
       _correctController.forward(from: 0.0);
-      Future.delayed(const Duration(milliseconds: 550), _nextQuestion);
+      Future.delayed(const Duration(milliseconds: 750), _nextQuestion);
     } else {
       SoundService.playWrong();
       _shakeController.forward(from: 0.0);
@@ -728,7 +742,7 @@ class _SessionPageState extends State<SessionPage>
   Widget _buildQuestionCard(ExerciseQuestion q, {required Key key}) {
     return AnimatedBuilder(
       key: key,
-      animation: _correctController,
+      animation: _correctAnimation,
       builder: (context, _) {
         switch (q.type) {
           case ExerciseType.flashcard:
@@ -867,7 +881,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctProgress),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -900,7 +914,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctProgress),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -942,7 +956,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctProgress),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1003,7 +1017,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(32),
-      decoration: _cardDecoration(progress: _correctProgress),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1071,7 +1085,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctProgress),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1517,23 +1531,20 @@ class _SessionPageState extends State<SessionPage>
   // ─── Yardımcı Widget'lar ──────────────────────────────────────────────────
 
   BoxDecoration _cardDecoration({double progress = 0.0}) {
-    final hasProgress = progress > 0.005;
-    final strokeColor = Color.lerp(
-      const Color(0xFF1E2D4A),
-      const Color(0xFF4CAF50).withValues(alpha: 0.65),
-      progress,
-    )!;
-    final bgColor = Color.lerp(
-      const Color(0xFF131D36),
-      const Color(0xFF4CAF50).withValues(alpha: 0.06),
-      progress,
-    )!;
-
+    final clamped = progress.clamp(0.0, 1.0);
     return BoxDecoration(
-      color: bgColor,
+      color: Color.lerp(
+        const Color(0xFF131D36),
+        const Color(0xFF4CAF50).withValues(alpha: 0.06),
+        clamped,
+      )!,
       borderRadius: BorderRadius.circular(28),
       border: Border.all(
-        color: strokeColor,
+        color: Color.lerp(
+          const Color(0xFF1E2D4A),
+          const Color(0xFF4CAF50).withValues(alpha: 0.65),
+          clamped,
+        )!,
         width: 2,
       ),
       boxShadow: [
@@ -1542,12 +1553,11 @@ class _SessionPageState extends State<SessionPage>
           blurRadius: 28,
           offset: const Offset(0, 10),
         ),
-        if (hasProgress)
-          BoxShadow(
-            color: const Color(0xFF4CAF50).withValues(alpha: 0.18 * progress),
-            blurRadius: 16,
-            spreadRadius: 1,
-          ),
+        BoxShadow(
+          color: const Color(0xFF4CAF50).withValues(alpha: 0.18 * clamped),
+          blurRadius: 16,
+          spreadRadius: 1,
+        ),
       ],
     );
   }
