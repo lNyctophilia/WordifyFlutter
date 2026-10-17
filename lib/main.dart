@@ -141,14 +141,48 @@ class WordifyHomePage extends StatefulWidget {
 class _WordifyHomePageState extends State<WordifyHomePage> {
   int? _selectedDay;
   int? _lastDbDay;
+  int _currentActiveDay = 1;
+  VoidCallback? _latestStartAction;
 
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       UpdateService.checkForUpdates(context);
       SpacedRepetitionService.initMockDataIfEmpty();
     });
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (!mounted) return false;
+    if (ModalRoute.of(context)?.isCurrent != true) return false;
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      if (_currentActiveDay > 1) {
+        final prev = _currentActiveDay - 1;
+        setState(() => _selectedDay = prev);
+        SpacedRepetitionService.setCurrentDay(prev);
+        return true;
+      }
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      final next = _currentActiveDay + 1;
+      setState(() => _selectedDay = next);
+      SpacedRepetitionService.setCurrentDay(next);
+      return true;
+    } else if (event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      _latestStartAction?.call();
+      return true;
+    }
+    return false;
   }
 
   Future<void> _openSettings(BuildContext context) async {
@@ -176,50 +210,63 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
   Future<void> _showRestartConfirmationDialog(BuildContext context, int day) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF131D36),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.refresh_rounded, color: Color(0xFF00E676)),
-            SizedBox(width: 10),
-            Text(
-              'Eğitimi Baştan Başlat',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+      builder: (ctx) => CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.enter): () =>
+              Navigator.of(ctx).pop(true),
+          const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
+              Navigator.of(ctx).pop(true),
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              Navigator.of(ctx).pop(false),
+        },
+        child: Focus(
+          autofocus: true,
+          child: AlertDialog(
+            backgroundColor: const Color(0xFF131D36),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.refresh_rounded, color: Color(0xFF00E676)),
+                SizedBox(width: 10),
+                Text(
+                  'Eğitimi Baştan Başlat',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+            content: const Text(
+              'Eğitimi bitirdiniz. Baştan başlansın mı?\n\nEvet derseniz bugünün verileri silinip en baştan başlanacaktır.',
+              style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
+            ),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Hayır', style: TextStyle(color: Colors.white60)),
               ),
-            ),
-          ],
-        ),
-        content: const Text(
-          'Eğitimi bitirdiniz. Baştan başlansın mı?\n\nEvet derseniz bugünün verileri silinip en baştan başlanacaktır.',
-          style: TextStyle(color: Colors.white70, fontSize: 15, height: 1.4),
-        ),
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Hayır', style: TextStyle(color: Colors.white60)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3A86FF),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3A86FF),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Evet',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
-            child: const Text(
-              'Evet',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
 
@@ -243,6 +290,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
         }
         _lastDbDay = dbDay;
         final activeDay = _selectedDay!;
+        _currentActiveDay = activeDay;
         final streak = (profile['streak'] as num?)?.toInt() ?? 0;
         final rawActivity = profile['weekly_activity'];
         List<double> weeklyActivity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
@@ -437,6 +485,16 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                   ? parts[nextPartIdx]
                                   : SessionPart.introduction;
 
+                              void startAction() {
+                                if (allDone) {
+                                  _showRestartConfirmationDialog(
+                                      context, activeDay);
+                                } else {
+                                  _startSession(activeDay, nextPart);
+                                }
+                              }
+                              _latestStartAction = startAction;
+
                               return Container(
                                 padding: const EdgeInsets.all(24),
                                 decoration: BoxDecoration(
@@ -505,16 +563,9 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                                 begin: Alignment.topLeft,
                                                 end: Alignment.bottomRight,
                                               ),
-                                      ),
-                                      child: ElevatedButton(
-                                        onPressed: () {
-                                          if (allDone) {
-                                            _showRestartConfirmationDialog(
-                                                context, activeDay);
-                                          } else {
-                                            _startSession(activeDay, nextPart);
-                                          }
-                                        },
+                                        ),
+                                        child: ElevatedButton(
+                                        onPressed: startAction,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.transparent,
                                           disabledBackgroundColor: Colors.transparent,
@@ -551,7 +602,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                           ],
                                         ),
                                       ),
-                                    ),
+                                      ),
                                   ],
                                 ),
                               );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:math';
 import 'spaced_repetition_service.dart';
 import 'models/exercise_types.dart';
@@ -129,7 +130,7 @@ class SessionPage extends StatefulWidget {
 }
 
 class _SessionPageState extends State<SessionPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   List<ExerciseQuestion> _questions = [];
   List<SpacedWord> _newWords = [];
   bool _isLoading = true;
@@ -151,6 +152,8 @@ class _SessionPageState extends State<SessionPage>
   final TextEditingController _textController = TextEditingController();
   FocusNode _focusNode = FocusNode();
   late AnimationController _shakeController;
+  late AnimationController _correctController;
+  late Animation<double> _correctAnimation;
 
   // Dinleme modunda kelimeyi kaç kez dinledi
   int _listenCount = 0;
@@ -159,21 +162,95 @@ class _SessionPageState extends State<SessionPage>
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     SoundService.init();
     TtsService.init();
     _shakeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
+    _correctController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _correctAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
+        weight: 55,
+      ),
+    ]).animate(_correctController);
     _loadPartQuestions();
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _textController.dispose();
     _focusNode.dispose();
     _shakeController.dispose();
+    _correctController.dispose();
     super.dispose();
+  }
+
+  void _continueFromFinished() {
+    final bool hasNextPart = !(widget.part == SessionPart.review ||
+        widget.part == SessionPart.bonus ||
+        _noReviewForPart3);
+
+    if (!hasNextPart) {
+      Navigator.of(context).pop();
+    } else {
+      final nextPart = widget.part == SessionPart.introduction
+          ? SessionPart.deepening
+          : SessionPart.review;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => SessionPage(day: widget.day, part: nextPart),
+        ),
+      );
+    }
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (!mounted) return false;
+    if (ModalRoute.of(context)?.isCurrent != true) return false;
+
+    // ESC: Eğitimden çık / Ana menüye dön
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.of(context).pop();
+      return true;
+    }
+
+    // ENTER: Devam et (Yanlış bildirim paneli, bitiş ekranı, flashcard)
+    if (event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      if (_isPartFinished) {
+        _continueFromFinished();
+        return true;
+      }
+
+      if (_showFeedback) {
+        _nextQuestion();
+        return true;
+      }
+
+      if (!_isLoading && _questions.isNotEmpty) {
+        final currentQ = _questions[_currentIndex];
+        if (currentQ.type == ExerciseType.flashcard) {
+          _onFlashcardNext();
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   // ─── Yükleme ────────────────────────────────────────────────────────────
@@ -334,6 +411,7 @@ class _SessionPageState extends State<SessionPage>
         _isCorrect = true;
         _selectedAnswer = answer;
       });
+      _correctController.forward(from: 0.0);
       Future.delayed(const Duration(milliseconds: 700), _nextQuestion);
     } else {
       SoundService.playWrong();
@@ -412,6 +490,7 @@ class _SessionPageState extends State<SessionPage>
         _textController.clear();
         _listenCount = 0;
       });
+      _correctController.reset();
 
       final next = _questions[_currentIndex];
       _speakCurrentQuestion(next);
@@ -655,25 +734,31 @@ class _SessionPageState extends State<SessionPage>
   // ─── Soru Kartı Yönlendirici ──────────────────────────────────────────────
 
   Widget _buildQuestionCard(ExerciseQuestion q, {required Key key}) {
-    switch (q.type) {
-      case ExerciseType.flashcard:
-        return _buildFlashcardCard(q, key: key);
-      case ExerciseType.trToEnWriting:
-        return _buildTrToEnCard(q, key: key);
-      case ExerciseType.enToTrWriting:
-        return _buildEnToTrCard(q, key: key);
-      case ExerciseType.clozeWriting:
-        return _buildClozeCard(q, key: key);
-      case ExerciseType.listeningWriting:
-        return _buildListeningCard(q, key: key);
-      case ExerciseType.hintedWriting:
-        return _buildHintedCard(q, key: key);
-    }
+    return AnimatedBuilder(
+      key: key,
+      animation: _correctAnimation,
+      builder: (context, _) {
+        switch (q.type) {
+          case ExerciseType.flashcard:
+            return _buildFlashcardCard(q);
+          case ExerciseType.trToEnWriting:
+            return _buildTrToEnCard(q);
+          case ExerciseType.enToTrWriting:
+            return _buildEnToTrCard(q);
+          case ExerciseType.clozeWriting:
+            return _buildClozeCard(q);
+          case ExerciseType.listeningWriting:
+            return _buildListeningCard(q);
+          case ExerciseType.hintedWriting:
+            return _buildHintedCard(q);
+        }
+      },
+    );
   }
 
   // ─── Flashcard ────────────────────────────────────────────────────────────
 
-  Widget _buildFlashcardCard(ExerciseQuestion q, {required Key key}) {
+  Widget _buildFlashcardCard(ExerciseQuestion q, {Key? key}) {
     return Container(
       key: key,
       width: double.infinity,
@@ -784,13 +869,13 @@ class _SessionPageState extends State<SessionPage>
 
   // ─── TR → EN Yazma ────────────────────────────────────────────────────────
 
-  Widget _buildTrToEnCard(ExerciseQuestion q, {required Key key}) {
+  Widget _buildTrToEnCard(ExerciseQuestion q, {Key? key}) {
     return Container(
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -817,13 +902,13 @@ class _SessionPageState extends State<SessionPage>
 
   // ─── EN → TR Yazma ────────────────────────────────────────────────────────
 
-  Widget _buildEnToTrCard(ExerciseQuestion q, {required Key key}) {
+  Widget _buildEnToTrCard(ExerciseQuestion q, {Key? key}) {
     return Container(
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -859,13 +944,13 @@ class _SessionPageState extends State<SessionPage>
 
   // ─── Cümle Boşluk (Yazma) ────────────────────────────────────────────────
 
-  Widget _buildClozeCard(ExerciseQuestion q, {required Key key}) {
+  Widget _buildClozeCard(ExerciseQuestion q, {Key? key}) {
     return Container(
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -920,13 +1005,13 @@ class _SessionPageState extends State<SessionPage>
 
   // ─── Dinleme → Yazma ─────────────────────────────────────────────────────
 
-  Widget _buildListeningCard(ExerciseQuestion q, {required Key key}) {
+  Widget _buildListeningCard(ExerciseQuestion q, {Key? key}) {
     return Container(
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(32),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -988,13 +1073,13 @@ class _SessionPageState extends State<SessionPage>
 
   // ─── İpuçlu Yazma ────────────────────────────────────────────────────────
 
-  Widget _buildHintedCard(ExerciseQuestion q, {required Key key}) {
+  Widget _buildHintedCard(ExerciseQuestion q, {Key? key}) {
     return Container(
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(progress: _correctAnimation.value),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1392,23 +1477,7 @@ class _SessionPageState extends State<SessionPage>
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        if (!hasNextPart) {
-                          Navigator.of(context).pop();
-                        } else {
-                          // Sonraki part'a geç
-                          final nextPart =
-                              widget.part == SessionPart.introduction
-                                  ? SessionPart.deepening
-                                  : SessionPart.review;
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => SessionPage(
-                                  day: widget.day, part: nextPart),
-                            ),
-                          );
-                        }
-                      },
+                      onPressed: _continueFromFinished,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: color,
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1454,26 +1523,39 @@ class _SessionPageState extends State<SessionPage>
 
   // ─── Yardımcı Widget'lar ──────────────────────────────────────────────────
 
-  BoxDecoration _cardDecoration({bool isCorrect = false}) {
+  BoxDecoration _cardDecoration({double progress = 0.0, bool isCorrect = false}) {
+    final effectiveProgress = progress > 0 ? progress : (isCorrect ? 1.0 : 0.0);
+    final hasProgress = effectiveProgress > 0.005;
+    final strokeColor = Color.lerp(
+      const Color(0xFF1E2D4A),
+      const Color(0xFF4CAF50).withValues(alpha: 0.65),
+      effectiveProgress,
+    )!;
+    final bgColor = Color.lerp(
+      const Color(0xFF131D36),
+      const Color(0xFF4CAF50).withValues(alpha: 0.06),
+      effectiveProgress,
+    )!;
+
     return BoxDecoration(
-      color: isCorrect
-          ? const Color(0xFF00E676).withValues(alpha: 0.08)
-          : const Color(0xFF131D36),
+      color: bgColor,
       borderRadius: BorderRadius.circular(28),
       border: Border.all(
-        color: isCorrect
-            ? const Color(0xFF00E676).withValues(alpha: 0.5)
-            : const Color(0xFF1E2D4A),
+        color: strokeColor,
         width: 2,
       ),
       boxShadow: [
         BoxShadow(
-          color: isCorrect
-              ? const Color(0xFF00E676).withValues(alpha: 0.15)
-              : Colors.black.withValues(alpha: 0.18),
+          color: Colors.black.withValues(alpha: 0.18),
           blurRadius: 28,
           offset: const Offset(0, 10),
         ),
+        if (hasProgress)
+          BoxShadow(
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.18 * effectiveProgress),
+            blurRadius: 16,
+            spreadRadius: 1,
+          ),
       ],
     );
   }
