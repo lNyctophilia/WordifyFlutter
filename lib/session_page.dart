@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math';
@@ -130,7 +131,7 @@ class SessionPage extends StatefulWidget {
 }
 
 class _SessionPageState extends State<SessionPage>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   List<ExerciseQuestion> _questions = [];
   List<SpacedWord> _newWords = [];
   bool _isLoading = true;
@@ -152,8 +153,8 @@ class _SessionPageState extends State<SessionPage>
   final TextEditingController _textController = TextEditingController();
   FocusNode _focusNode = FocusNode();
   late AnimationController _shakeController;
-  late AnimationController _correctController;
-  late Animation<double> _correctAnimation;
+  Timer? _correctTimer1;
+  Timer? _correctTimer2;
 
   // Dinleme modunda kelimeyi kaç kez dinledi
   int _listenCount = 0;
@@ -169,36 +170,17 @@ class _SessionPageState extends State<SessionPage>
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _correctController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 750),
-    );
-    _correctAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0.0, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 35,
-      ),
-      TweenSequenceItem(
-        tween: ConstantTween<double>(1.0),
-        weight: 35,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 30,
-      ),
-    ]).animate(_correctController);
     _loadPartQuestions();
   }
 
   @override
   void dispose() {
+    _correctTimer1?.cancel();
+    _correctTimer2?.cancel();
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _textController.dispose();
     _focusNode.dispose();
     _shakeController.dispose();
-    _correctController.dispose();
     super.dispose();
   }
 
@@ -411,12 +393,24 @@ class _SessionPageState extends State<SessionPage>
       if (q.type != ExerciseType.enToTrWriting) {
         TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
       }
+      _correctTimer1?.cancel();
+      _correctTimer2?.cancel();
       setState(() {
         _isCorrect = true;
         _selectedAnswer = answer;
       });
-      _correctController.forward(from: 0.0);
-      Future.delayed(const Duration(milliseconds: 750), _nextQuestion);
+      _correctTimer1 = Timer(const Duration(milliseconds: 400), () {
+        if (mounted) {
+          setState(() {
+            _isCorrect = false;
+          });
+        }
+      });
+      _correctTimer2 = Timer(const Duration(milliseconds: 650), () {
+        if (mounted) {
+          _nextQuestion();
+        }
+      });
     } else {
       SoundService.playWrong();
       _shakeController.forward(from: 0.0);
@@ -496,7 +490,6 @@ class _SessionPageState extends State<SessionPage>
         _textController.clear();
         _listenCount = 0;
       });
-      _correctController.reset();
 
       final next = _questions[_currentIndex];
       _speakCurrentQuestion(next);
@@ -740,26 +733,20 @@ class _SessionPageState extends State<SessionPage>
   // ─── Soru Kartı Yönlendirici ──────────────────────────────────────────────
 
   Widget _buildQuestionCard(ExerciseQuestion q, {required Key key}) {
-    return AnimatedBuilder(
-      key: key,
-      animation: _correctAnimation,
-      builder: (context, _) {
-        switch (q.type) {
-          case ExerciseType.flashcard:
-            return _buildFlashcardCard(q);
-          case ExerciseType.trToEnWriting:
-            return _buildTrToEnCard(q);
-          case ExerciseType.enToTrWriting:
-            return _buildEnToTrCard(q);
-          case ExerciseType.clozeWriting:
-            return _buildClozeCard(q);
-          case ExerciseType.listeningWriting:
-            return _buildListeningCard(q);
-          case ExerciseType.hintedWriting:
-            return _buildHintedCard(q);
-        }
-      },
-    );
+    switch (q.type) {
+      case ExerciseType.flashcard:
+        return _buildFlashcardCard(q, key: key);
+      case ExerciseType.trToEnWriting:
+        return _buildTrToEnCard(q, key: key);
+      case ExerciseType.enToTrWriting:
+        return _buildEnToTrCard(q, key: key);
+      case ExerciseType.clozeWriting:
+        return _buildClozeCard(q, key: key);
+      case ExerciseType.listeningWriting:
+        return _buildListeningCard(q, key: key);
+      case ExerciseType.hintedWriting:
+        return _buildHintedCard(q, key: key);
+    }
   }
 
   // ─── Flashcard ────────────────────────────────────────────────────────────
@@ -876,12 +863,14 @@ class _SessionPageState extends State<SessionPage>
   // ─── TR → EN Yazma ────────────────────────────────────────────────────────
 
   Widget _buildTrToEnCard(ExerciseQuestion q, {Key? key}) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(isCorrect: _isCorrect),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -909,12 +898,14 @@ class _SessionPageState extends State<SessionPage>
   // ─── EN → TR Yazma ────────────────────────────────────────────────────────
 
   Widget _buildEnToTrCard(ExerciseQuestion q, {Key? key}) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(isCorrect: _isCorrect),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -951,12 +942,14 @@ class _SessionPageState extends State<SessionPage>
   // ─── Cümle Boşluk (Yazma) ────────────────────────────────────────────────
 
   Widget _buildClozeCard(ExerciseQuestion q, {Key? key}) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(isCorrect: _isCorrect),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1012,12 +1005,14 @@ class _SessionPageState extends State<SessionPage>
   // ─── Dinleme → Yazma ─────────────────────────────────────────────────────
 
   Widget _buildListeningCard(ExerciseQuestion q, {Key? key}) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(32),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(isCorrect: _isCorrect),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1080,12 +1075,14 @@ class _SessionPageState extends State<SessionPage>
   // ─── İpuçlu Yazma ────────────────────────────────────────────────────────
 
   Widget _buildHintedCard(ExerciseQuestion q, {Key? key}) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
       key: key,
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(isCorrect: _isCorrect),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1530,21 +1527,16 @@ class _SessionPageState extends State<SessionPage>
 
   // ─── Yardımcı Widget'lar ──────────────────────────────────────────────────
 
-  BoxDecoration _cardDecoration({double progress = 0.0}) {
-    final clamped = progress.clamp(0.0, 1.0);
+  BoxDecoration _cardDecoration({bool isCorrect = false}) {
     return BoxDecoration(
-      color: Color.lerp(
-        const Color(0xFF131D36),
-        const Color(0xFF4CAF50).withValues(alpha: 0.06),
-        clamped,
-      )!,
+      color: isCorrect
+          ? const Color(0xFF4CAF50).withValues(alpha: 0.06)
+          : const Color(0xFF131D36),
       borderRadius: BorderRadius.circular(28),
       border: Border.all(
-        color: Color.lerp(
-          const Color(0xFF1E2D4A),
-          const Color(0xFF4CAF50).withValues(alpha: 0.65),
-          clamped,
-        )!,
+        color: isCorrect
+            ? const Color(0xFF4CAF50).withValues(alpha: 0.65)
+            : const Color(0xFF1E2D4A),
         width: 2,
       ),
       boxShadow: [
@@ -1554,7 +1546,9 @@ class _SessionPageState extends State<SessionPage>
           offset: const Offset(0, 10),
         ),
         BoxShadow(
-          color: const Color(0xFF4CAF50).withValues(alpha: 0.18 * clamped),
+          color: isCorrect
+              ? const Color(0xFF4CAF50).withValues(alpha: 0.18)
+              : Colors.transparent,
           blurRadius: 16,
           spreadRadius: 1,
         ),
