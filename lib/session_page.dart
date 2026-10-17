@@ -51,9 +51,49 @@ List<ExerciseQuestion> buildBonusQuestions(List<SpacedWord> words) {
       _makeQuestion(w, ExerciseType.trToEnWriting, SessionPart.bonus)).toList();
 }
 
+String _pickSingleSentence(String text) {
+  if (!text.contains('/')) return text.trim();
+  final parts =
+      text.split('/').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+  if (parts.isEmpty) return text.trim();
+  return parts[Random().nextInt(parts.length)];
+}
+
 ExerciseQuestion _makeQuestion(
     SpacedWord w, ExerciseType type, SessionPart part) {
-  String sentenceEn = w.exampleSentence ?? '';
+  String sentenceEn = (w.exampleSentence ?? '').trim();
+  String sentenceTr = (w.exampleTr ?? '').trim();
+
+  // Çoklu cümle varsa ("/" ile ayrılmış), TR ve EN uyumlu olacak şekilde rastgele birini seç
+  if (sentenceEn.contains('/') && sentenceTr.contains('/')) {
+    final enParts = sentenceEn
+        .split('/')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final trParts = sentenceTr
+        .split('/')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    if (enParts.isNotEmpty && enParts.length == trParts.length) {
+      final index = Random().nextInt(enParts.length);
+      sentenceEn = enParts[index];
+      sentenceTr = trParts[index];
+    } else if (enParts.isNotEmpty) {
+      final index = Random().nextInt(enParts.length);
+      sentenceEn = enParts[index];
+      if (trParts.isNotEmpty) {
+        sentenceTr = trParts[min(index, trParts.length - 1)];
+      }
+    }
+  } else if (sentenceEn.contains('/')) {
+    sentenceEn = _pickSingleSentence(sentenceEn);
+  } else if (sentenceTr.contains('/')) {
+    sentenceTr = _pickSingleSentence(sentenceTr);
+  }
+
   // Boşluk işareti normalizasyonu
   if (sentenceEn.isNotEmpty && !sentenceEn.contains('_____')) {
     sentenceEn = sentenceEn.replaceAll(
@@ -67,7 +107,7 @@ ExerciseQuestion _makeQuestion(
     wordEn: w.wordEn,
     wordTr: w.wordTr,
     sentenceEn: sentenceEn.isEmpty ? null : sentenceEn,
-    sentenceTr: w.exampleTr,
+    sentenceTr: sentenceTr.isEmpty ? null : sentenceTr,
     step: w.step,
   );
 }
@@ -810,15 +850,6 @@ class _SessionPageState extends State<SessionPage>
               _ttsButton(q.wordEn),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Birden fazla anlamı varsa herhangi biri geçerli',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.3),
-              fontSize: 12,
-            ),
-          ),
           const SizedBox(height: 32),
           _buildWritingField(hintText: 'Türkçe anlamını yazın...'),
         ],
@@ -1220,7 +1251,7 @@ class _SessionPageState extends State<SessionPage>
   Widget _buildPartFinishedView() {
     final partLabels = {
       SessionPart.introduction: 'Part 1 Tamamlandı! 🎉',
-      SessionPart.deepening: 'Part 2 Tamamlandı! 💪',
+      SessionPart.deepening: 'Part 2 Tamamlandı!',
       SessionPart.review: 'Part 3 Tamamlandı! ⭐',
       SessionPart.bonus: 'Bonus Tamamlandı! 🏆',
     };
@@ -1537,7 +1568,8 @@ class _SessionPageState extends State<SessionPage>
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      w.exampleSentence!.replaceAll('_____', w.wordEn),
+                      _pickSingleSentence(w.exampleSentence!)
+                          .replaceAll('_____', w.wordEn),
                       style: const TextStyle(
                           color: Colors.white38,
                           fontSize: 12,

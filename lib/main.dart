@@ -140,6 +140,7 @@ class WordifyHomePage extends StatefulWidget {
 
 class _WordifyHomePageState extends State<WordifyHomePage> {
   int? _selectedDay;
+  int? _lastDbDay;
 
   @override
   void initState() {
@@ -237,9 +238,10 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
       builder: (context, profileSnapshot) {
         final profile = profileSnapshot.data ?? {};
         final dbDay = (profile['current_day'] as num?)?.toInt() ?? 1;
-        if (_selectedDay == null || _selectedDay! > dbDay) {
+        if (_selectedDay == null || (_lastDbDay != null && dbDay < _lastDbDay!)) {
           _selectedDay = dbDay;
         }
+        _lastDbDay = dbDay;
         final activeDay = _selectedDay!;
         final streak = (profile['streak'] as num?)?.toInt() ?? 0;
         final rawActivity = profile['weekly_activity'];
