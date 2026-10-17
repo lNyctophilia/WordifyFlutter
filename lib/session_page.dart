@@ -153,7 +153,9 @@ class _SessionPageState extends State<SessionPage>
   FocusNode _focusNode = FocusNode();
   late AnimationController _shakeController;
   late AnimationController _correctController;
-  late Animation<double> _correctAnimation;
+
+  double get _correctProgress =>
+      _correctController.isAnimating ? sin(_correctController.value * pi).clamp(0.0, 1.0) : 0.0;
 
   // Dinleme modunda kelimeyi kaç kez dinledi
   int _listenCount = 0;
@@ -171,20 +173,8 @@ class _SessionPageState extends State<SessionPage>
     );
     _correctController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 550),
     );
-    _correctAnimation = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0.0, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 45,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeInCubic)),
-        weight: 55,
-      ),
-    ]).animate(_correctController);
     _loadPartQuestions();
   }
 
@@ -412,7 +402,7 @@ class _SessionPageState extends State<SessionPage>
         _selectedAnswer = answer;
       });
       _correctController.forward(from: 0.0);
-      Future.delayed(const Duration(milliseconds: 700), _nextQuestion);
+      Future.delayed(const Duration(milliseconds: 550), _nextQuestion);
     } else {
       SoundService.playWrong();
       _shakeController.forward(from: 0.0);
@@ -459,16 +449,17 @@ class _SessionPageState extends State<SessionPage>
   }
 
   void _focusWritingInput() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    void tryFocus() {
       if (mounted && _focusNode.canRequestFocus) {
         _focusNode.requestFocus();
       }
-    });
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (mounted && _focusNode.canRequestFocus) {
-        _focusNode.requestFocus();
-      }
-    });
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => tryFocus());
+    Future.delayed(const Duration(milliseconds: 100), tryFocus);
+    Future.delayed(const Duration(milliseconds: 250), tryFocus);
+    Future.delayed(const Duration(milliseconds: 400), tryFocus);
+    Future.delayed(const Duration(milliseconds: 550), tryFocus);
   }
 
   void _nextQuestion() {
@@ -476,6 +467,7 @@ class _SessionPageState extends State<SessionPage>
 
     if (_currentIndex < _questions.length - 1) {
       final oldFocusNode = _focusNode;
+      oldFocusNode.unfocus();
       _focusNode = FocusNode();
       Future.delayed(const Duration(milliseconds: 400), () {
         oldFocusNode.dispose();
@@ -736,7 +728,7 @@ class _SessionPageState extends State<SessionPage>
   Widget _buildQuestionCard(ExerciseQuestion q, {required Key key}) {
     return AnimatedBuilder(
       key: key,
-      animation: _correctAnimation,
+      animation: _correctController,
       builder: (context, _) {
         switch (q.type) {
           case ExerciseType.flashcard:
@@ -875,7 +867,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(progress: _correctProgress),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -908,7 +900,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(progress: _correctProgress),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -950,7 +942,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(progress: _correctProgress),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1011,7 +1003,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(32),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(progress: _correctProgress),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1079,7 +1071,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(progress: _correctAnimation.value),
+      decoration: _cardDecoration(progress: _correctProgress),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1122,6 +1114,7 @@ class _SessionPageState extends State<SessionPage>
     return Column(
       children: [
         TextField(
+          key: ValueKey('input_field_$_currentIndex'),
           controller: _textController,
           focusNode: _focusNode,
           autofocus: true,
@@ -1523,18 +1516,17 @@ class _SessionPageState extends State<SessionPage>
 
   // ─── Yardımcı Widget'lar ──────────────────────────────────────────────────
 
-  BoxDecoration _cardDecoration({double progress = 0.0, bool isCorrect = false}) {
-    final effectiveProgress = progress > 0 ? progress : (isCorrect ? 1.0 : 0.0);
-    final hasProgress = effectiveProgress > 0.005;
+  BoxDecoration _cardDecoration({double progress = 0.0}) {
+    final hasProgress = progress > 0.005;
     final strokeColor = Color.lerp(
       const Color(0xFF1E2D4A),
       const Color(0xFF4CAF50).withValues(alpha: 0.65),
-      effectiveProgress,
+      progress,
     )!;
     final bgColor = Color.lerp(
       const Color(0xFF131D36),
       const Color(0xFF4CAF50).withValues(alpha: 0.06),
-      effectiveProgress,
+      progress,
     )!;
 
     return BoxDecoration(
@@ -1552,7 +1544,7 @@ class _SessionPageState extends State<SessionPage>
         ),
         if (hasProgress)
           BoxShadow(
-            color: const Color(0xFF4CAF50).withValues(alpha: 0.18 * effectiveProgress),
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.18 * progress),
             blurRadius: 16,
             spreadRadius: 1,
           ),
