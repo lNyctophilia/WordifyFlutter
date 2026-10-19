@@ -153,8 +153,10 @@ class _SessionPageState extends State<SessionPage>
   final TextEditingController _textController = TextEditingController();
   FocusNode _focusNode = FocusNode();
   late AnimationController _shakeController;
-  Timer? _correctTimer1;
-  Timer? _correctTimer2;
+  Timer? _flashTimer;
+  Timer? _transitionTimer;
+  bool _correctStroke = false;
+  bool _wrongStroke = false;
 
   // Dinleme modunda kelimeyi kaç kez dinledi
   int _listenCount = 0;
@@ -175,8 +177,8 @@ class _SessionPageState extends State<SessionPage>
 
   @override
   void dispose() {
-    _correctTimer1?.cancel();
-    _correctTimer2?.cancel();
+    _flashTimer?.cancel();
+    _transitionTimer?.cancel();
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _textController.dispose();
     _focusNode.dispose();
@@ -393,20 +395,22 @@ class _SessionPageState extends State<SessionPage>
       if (q.type != ExerciseType.enToTrWriting) {
         TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
       }
-      _correctTimer1?.cancel();
-      _correctTimer2?.cancel();
+      _flashTimer?.cancel();
+      _transitionTimer?.cancel();
       setState(() {
         _isCorrect = true;
+        _correctStroke = true;
+        _wrongStroke = false;
         _selectedAnswer = answer;
       });
-      _correctTimer1 = Timer(const Duration(milliseconds: 400), () {
+      _flashTimer = Timer(const Duration(milliseconds: 400), () {
         if (mounted) {
           setState(() {
-            _isCorrect = false;
+            _correctStroke = false;
           });
         }
       });
-      _correctTimer2 = Timer(const Duration(milliseconds: 650), () {
+      _transitionTimer = Timer(const Duration(milliseconds: 650), () {
         if (mounted) {
           _nextQuestion();
         }
@@ -447,11 +451,21 @@ class _SessionPageState extends State<SessionPage>
       // Yanlış cevap feedback'inde kelimeyi söyle
       TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
 
+      _flashTimer?.cancel();
       setState(() {
         _isCorrect = false;
+        _correctStroke = false;
+        _wrongStroke = true;
         _showFeedback = true;
         _selectedAnswer = answer;
         _falseFriendNote = note;
+      });
+      _flashTimer = Timer(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          setState(() {
+            _wrongStroke = false;
+          });
+        }
       });
     }
   }
@@ -485,6 +499,8 @@ class _SessionPageState extends State<SessionPage>
         _currentIndex++;
         _showFeedback = false;
         _isCorrect = false;
+        _correctStroke = false;
+        _wrongStroke = false;
         _selectedAnswer = null;
         _falseFriendNote = null;
         _textController.clear();
@@ -870,7 +886,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -905,7 +921,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -949,7 +965,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1012,7 +1028,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(32),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1082,7 +1098,7 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _isCorrect),
+      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1339,10 +1355,10 @@ class _SessionPageState extends State<SessionPage>
 
   Widget _buildPartFinishedView() {
     final partLabels = {
-      SessionPart.introduction: 'Part 1 Tamamlandı! 🎉',
+      SessionPart.introduction: 'Part 1 Tamamlandı!',
       SessionPart.deepening: 'Part 2 Tamamlandı!',
-      SessionPart.review: 'Part 3 Tamamlandı! ⭐',
-      SessionPart.bonus: 'Bonus Tamamlandı! 🏆',
+      SessionPart.review: 'Part 3 Tamamlandı!',
+      SessionPart.bonus: 'Bonus Tamamlandı!',
     };
     final partColors = {
       SessionPart.introduction: const Color(0xFF3A86FF),
@@ -1527,16 +1543,19 @@ class _SessionPageState extends State<SessionPage>
 
   // ─── Yardımcı Widget'lar ──────────────────────────────────────────────────
 
-  BoxDecoration _cardDecoration({bool isCorrect = false}) {
+  BoxDecoration _cardDecoration({bool isCorrect = false, bool isWrong = false}) {
+    Color borderColor = const Color(0xFF1E2D4A);
+    if (isCorrect) {
+      borderColor = const Color(0xFF4CAF50);
+    } else if (isWrong) {
+      borderColor = Colors.redAccent;
+    }
+
     return BoxDecoration(
-      color: isCorrect
-          ? const Color(0xFF4CAF50).withValues(alpha: 0.06)
-          : const Color(0xFF131D36),
+      color: const Color(0xFF131D36),
       borderRadius: BorderRadius.circular(28),
       border: Border.all(
-        color: isCorrect
-            ? const Color(0xFF4CAF50).withValues(alpha: 0.65)
-            : const Color(0xFF1E2D4A),
+        color: borderColor,
         width: 2,
       ),
       boxShadow: [
@@ -1545,13 +1564,18 @@ class _SessionPageState extends State<SessionPage>
           blurRadius: 28,
           offset: const Offset(0, 10),
         ),
-        BoxShadow(
-          color: isCorrect
-              ? const Color(0xFF4CAF50).withValues(alpha: 0.18)
-              : Colors.transparent,
-          blurRadius: 16,
-          spreadRadius: 1,
-        ),
+        if (isCorrect)
+          BoxShadow(
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.25),
+            blurRadius: 14,
+            spreadRadius: 1,
+          ),
+        if (isWrong)
+          BoxShadow(
+            color: Colors.redAccent.withValues(alpha: 0.25),
+            blurRadius: 14,
+            spreadRadius: 1,
+          ),
       ],
     );
   }

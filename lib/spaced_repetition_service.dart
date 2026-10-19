@@ -160,7 +160,8 @@ class DayPartProgress {
   }
 
   bool isPart3Complete({bool hasNoReviewWords = false}) =>
-      part3Completed || hasNoReviewWords;
+      part3Completed ||
+      (part1Completed && part2Completed && hasNoReviewWords);
 
   bool isAllDone({bool hasNoReviewWords = false}) =>
       part1Completed &&
@@ -408,9 +409,12 @@ class SpacedRepetitionService {
     final doc = _userDoc();
     if (doc != null) {
       try {
+        final dayProgress = await getDayPartProgress(safeDay);
         await doc.set({
           'current_day': safeDay,
           'currentDay': safeDay,
+          'current_part': dayProgress.currentPart,
+          'currentPart': dayProgress.currentPart,
           'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } catch (e) {
@@ -519,19 +523,6 @@ class SpacedRepetitionService {
               ? Map<String, dynamic>.from(data['day_${day}_progress'])
               : null;
 
-          final curDay = (data['current_day'] ?? data['currentDay'] as num?)?.toInt() ?? 1;
-          if (dayMap == null && day == curDay) {
-            final curPart = (data['current_part'] ?? data['currentPart'] as num?)?.toInt();
-            if (curPart != null) {
-              dayMap = {
-                'current_part': curPart,
-                'part1_completed': curPart >= 2,
-                'part2_completed': curPart >= 3,
-                'part3_completed': curPart >= 4,
-              };
-            }
-          }
-
           if (dayMap != null) {
             final res = DayPartProgress.fromMap(dayMap);
             _dayProgressCache[day] = res;
@@ -579,19 +570,6 @@ class SpacedRepetitionService {
       dayMap ??= (data['day_${day}_progress'] is Map)
           ? Map<String, dynamic>.from(data['day_${day}_progress'])
           : null;
-
-      final curDay = (data['current_day'] ?? data['currentDay'] as num?)?.toInt() ?? 1;
-      if (dayMap == null && day == curDay) {
-        final curPart = (data['current_part'] ?? data['currentPart'] as num?)?.toInt();
-        if (curPart != null) {
-          dayMap = {
-            'current_part': curPart,
-            'part1_completed': curPart >= 2,
-            'part2_completed': curPart >= 3,
-            'part3_completed': curPart >= 4,
-          };
-        }
-      }
 
       if (dayMap != null) {
         final res = DayPartProgress.fromMap(dayMap);
