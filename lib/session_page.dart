@@ -1355,10 +1355,10 @@ class _SessionPageState extends State<SessionPage>
 
   Widget _buildPartFinishedView() {
     final partLabels = {
-      SessionPart.introduction: 'Part 1 Tamamlandı 🎉',
-      SessionPart.deepening: 'Part 2 Tamamlandı 🎉',
-      SessionPart.review: 'Part 3 Tamamlandı 🎉',
-      SessionPart.bonus: 'Bonus Tamamlandı 🎉',
+      SessionPart.introduction: 'Part 1 Bitti 🎉',
+      SessionPart.deepening: 'Part 2 Bitti 🎉',
+      SessionPart.review: 'Part 3 Bitti 🎉',
+      SessionPart.bonus: 'Bonus Bitti 🎉',
     };
     final partColors = {
       SessionPart.introduction: const Color(0xFF3A86FF),

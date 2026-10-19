@@ -387,14 +387,22 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                 ),
               ),
               body: SafeArea(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 500),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: (constraints.maxHeight - 40).clamp(0.0, double.infinity),
+                        ),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 500),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
                           // Upper Part: Streak & Total Learned
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -418,7 +426,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
 
                           // Day Navigation Switcher
                           Container(
@@ -482,7 +490,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 20),
                           
                           // Main Task Card
                           StreamBuilder<DayPartProgress>(
@@ -588,7 +596,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                       isCompleted: isPart3Done,
                                     ),
 
-                                    const SizedBox(height: 32),
+                                    const SizedBox(height: 28),
 
                                     // Start / Continue Button
                                     Container(
@@ -650,14 +658,16 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                               );
                             },
                           ),
-
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
           },
         );
       },
