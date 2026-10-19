@@ -333,11 +333,6 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
         final activeDay = _selectedDay!;
         _currentActiveDay = activeDay;
         final streak = (profile['streak'] as num?)?.toInt() ?? 0;
-        final rawActivity = profile['weekly_activity'];
-        List<double> weeklyActivity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-        if (rawActivity is List) {
-          weeklyActivity = rawActivity.map((e) => ((e as num?)?.toDouble() ?? 0.0).clamp(0.0, 1.0)).toList();
-        }
 
         return StreamBuilder<Map<String, int>>(
           stream: SpacedRepetitionService.getStatsStreamForDay(activeDay),
@@ -656,21 +651,6 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                             },
                           ),
 
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Bottom Part: Activity or Stats Summary
-                  const Text(
-                    'Haftalık Aktivite',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildWeeklyActivityGraph(weeklyActivity),
                 ],
               ),
             ),
@@ -892,56 +872,4 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     );
   }
 
-  Widget _buildWeeklyActivityGraph(List<double> activity) {
-    final days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-    
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF131D36),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFF1E2D4A),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: List.generate(7, (index) {
-          return Column(
-            children: [
-              Container(
-                width: 24,
-                height: 100,
-                alignment: Alignment.bottomCenter,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E2D4A),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: FractionallySizedBox(
-                  heightFactor: activity[index],
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: activity[index] > 0 ? const Color(0xFF3A86FF) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                days[index],
-                style: const TextStyle(
-                  color: Colors.white54,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          );
-        }),
-      ),
-    );
-  }
 }

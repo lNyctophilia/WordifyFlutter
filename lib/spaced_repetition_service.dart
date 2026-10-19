@@ -282,24 +282,12 @@ class SpacedRepetitionService {
       return Stream.value({
         'current_day': _cachedDay,
         'streak': 0,
-        'weekly_activity': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
       });
     }
 
     return doc.snapshots().map((snapshot) {
       final data = snapshot.data() ?? {};
       final streak = (data['streak'] as num?)?.toInt() ?? 0;
-      final rawActivity = data['weekly_activity'];
-      List<double> activity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-
-      if (rawActivity is List) {
-        activity = rawActivity
-            .map((e) => ((e as num?)?.toDouble() ?? 0.0).clamp(0.0, 1.0))
-            .toList();
-        while (activity.length < 7) {
-          activity.add(0.0);
-        }
-      }
 
       final dbDay = (data['current_day'] as num?)?.toInt() ??
           (data['currentDay'] as num?)?.toInt();
@@ -314,7 +302,6 @@ class SpacedRepetitionService {
         'current_part': currentPart,
         'currentPart': currentPart,
         'streak': streak,
-        'weekly_activity': activity,
       };
     });
   }
@@ -326,7 +313,6 @@ class SpacedRepetitionService {
     final now = DateTime.now();
     final todayStr =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final weekdayIndex = now.weekday - 1;
 
     final snap = await doc.get();
     final data = snap.data() ?? {};
@@ -352,21 +338,10 @@ class SpacedRepetitionService {
       }
     }
 
-    List<double> activity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-    final rawActivity = data['weekly_activity'];
-    if (rawActivity is List) {
-      activity =
-          rawActivity.map((e) => (e as num?)?.toDouble() ?? 0.0).toList();
-      while (activity.length < 7) {
-        activity.add(0.0);
-      }
-    }
-    activity[weekdayIndex] = (activity[weekdayIndex] + 0.1).clamp(0.0, 1.0);
-
     await doc.set({
       'streak': streak,
       'last_study_date': todayStr,
-      'weekly_activity': activity,
+      'weekly_activity': FieldValue.delete(),
     }, SetOptions(merge: true));
   }
 
@@ -1064,7 +1039,7 @@ class SpacedRepetitionService {
       'current_part_name': 'introduction',
       'days_progress': {},
       'streak': 0,
-      'weekly_activity': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      'weekly_activity': FieldValue.delete(),
       'last_study_date': null,
       'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
     };
