@@ -29247,7 +29247,7 @@ if(m.b===200){h=m
 l=t.a.a(B.dp.WD(A.b3l(A.b0M(h.e)).fZ(h.w),null))
 g=A.a7(J.f_(l,"fullVersion"))
 k=g==null?"":g
-j="Versiyon (21.10.2026-16.12)"
+j="Versiyon (21.10.2026-18.49)"
 if(J.cC(k)!==0&&!J.d(k,j)){if(a.e!=null)A.aZH(a,k)}else if(a0&&a.e!=null){f=a.al(t.Pu).f
 f.Y8()
 h=t.p
@@ -95403,7 +95403,7 @@ q=A.bI(16)
 p=A.f3(B.j.bX(0.07),1)
 o=A.bI(12)
 n=A.b([new A.d7(1,B.bA,B.D.bX(0.2),B.h,16)],t.sq)
-r.push(A.cl(h,A.cI(A.b([A.cl(h,A.LM(A.bI(12),A.aJd("assets/icon.png",B.jj,h,h)),B.p,h,h,new A.bJ(h,h,h,o,n,h,B.Y),h,52,h,h,h,h,52),B.iu,B.YH,B.fA,A.br("Versiyon (21.10.2026-16.12)",h,h,h,B.X3,h,h),B.Ah,A.aIA(B.j.bX(0.06),40,1,40),B.Ah,B.YS,B.fz,B.YI],s),B.v,B.u,B.A),B.p,h,h,new A.bJ(B.aP,h,p,q,h,h,B.Y),h,h,h,B.GO,h,h,h))
+r.push(A.cl(h,A.cI(A.b([A.cl(h,A.LM(A.bI(12),A.aJd("assets/icon.png",B.jj,h,h)),B.p,h,h,new A.bJ(h,h,h,o,n,h,B.Y),h,52,h,h,h,h,52),B.iu,B.YH,B.fA,A.br("Versiyon (21.10.2026-18.49)",h,h,h,B.X3,h,h),B.Ah,A.aIA(B.j.bX(0.06),40,1,40),B.Ah,B.YS,B.fz,B.YI],s),B.v,B.u,B.A),B.p,h,h,new A.bJ(B.aP,h,p,q,h,h,B.Y),h,h,h,B.GO,h,h,h))
 q=A.a6([null,0],t.LO,t.S)
 s=r.length
 return A.w1(f,B.aH,A.kG(!0,A.hz(new A.ex(B.Ct,new A.Oz(new A.amg(!0,!0,!0,r,q),B.hk,B.aB,!1,h,h,B.mA,!1,h,h,s,B.aQ,h,h,B.a_,B.aK,h),h),h,h),!0))}}
@@ -95592,7 +95592,7 @@ if(k===q){if(j<=q)++p}else if(k<q)o=j<=q?o+1:o}return A.a6(["new",Math.min(p,5),
 $S:656}
 A.aoH.prototype={
 $1(a){var s=null,r=A.bI(16),q=A.bI(8),p=A.f3(B.nC,1),o=t.p
-q=A.cI(A.b([B.YK,B.fy,A.cl(s,A.cI(A.b([A.br("Mevcut: Versiyon (21.10.2026-16.12)",s,s,s,B.Uv,s,s),B.fA,A.br("Yeni: "+this.a,s,s,s,B.XP,s,s)],o),B.aq,B.u,B.A),B.p,s,s,new A.bJ(B.EG,s,p,q,s,s,B.Y),s,s,s,B.o8,s,s,1/0)],o),B.aq,B.u,B.aD)
+q=A.cI(A.b([B.YK,B.fy,A.cl(s,A.cI(A.b([A.br("Mevcut: Versiyon (21.10.2026-18.49)",s,s,s,B.Uv,s,s),B.fA,A.br("Yeni: "+this.a,s,s,s,B.XP,s,s)],o),B.aq,B.u,B.A),B.p,s,s,new A.bJ(B.EG,s,p,q,s,s,B.Y),s,s,s,B.o8,s,s,1/0)],o),B.aq,B.u,B.aD)
 return A.aKx(!1,A.aD_(A.b([A.EF(B.YE,new A.aoG(a),s),B.a13],o),s,B.aP,q,new A.c2(r,B.Cj),B.Qf),s,t.z)},
 $S:234}
 A.aoG.prototype={
