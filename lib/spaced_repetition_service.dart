@@ -728,22 +728,28 @@ class SpacedRepetitionService {
 
   static ExerciseQuestion _makeQuestion(
       SpacedWord w, ExerciseType type, SessionPart part) {
-    String sentenceEn = _pickSingleSentence(w.exampleSentence ?? '', w.wordEn);
-    String sentenceTr = _pickSingleSentenceTr(w.exampleTr ?? '', w.wordTr);
+    // EN ve TR cümlelerini aynı index ile seç (anlam-cümle eşleşmesi için)
+    final picked = _pickPairedSentences(
+      enText: w.exampleSentence ?? '',
+      trText: w.exampleTr ?? '',
+      trMeanings: w.wordTr,
+    );
+    String sentenceEn = picked.sentenceEn;
+    String sentenceTr = picked.sentenceTr;
+    final String matchedTrMeaning = picked.matchedTrMeaning;
 
-    // Parantez içindeki kelimeleri düzelt — asset'te zaten parantezli format var
-    // Örnek: "The doctor cared for the (patient)." → zaten parantezli
-    // Eğer parantez yoksa, kelimeyi parantezle çevreleyerek ekle
+    // EN cümle: kelime İngilizce haliyle parantez içinde olmalı
     if (sentenceEn.isNotEmpty && !sentenceEn.contains('(')) {
       sentenceEn = sentenceEn.replaceAll(
         RegExp(RegExp.escape(w.wordEn), caseSensitive: false),
         '(${w.wordEn})',
       );
     }
+    // TR cümle: cümleyle eşleşen Türkçe anlam parantez içinde olmalı
     if (sentenceTr.isNotEmpty && !sentenceTr.contains('(')) {
       sentenceTr = sentenceTr.replaceAll(
-        RegExp(RegExp.escape(w.wordTr.split('/').first.trim()), caseSensitive: false),
-        '(${w.wordTr.split('/').first.trim()})',
+        RegExp(RegExp.escape(matchedTrMeaning), caseSensitive: false),
+        '($matchedTrMeaning)',
       );
     }
 
@@ -752,6 +758,8 @@ class SpacedRepetitionService {
         ? AnswerDirection.toEnglish
         : AnswerDirection.toTurkish;
 
+    // wordTr → validasyon için tüm anlamlar korunur (hasta / sabırlı gibi)
+    // matchedTrMeaning → sadece cümle içi parantez görünümü için kullanıldı
     return ExerciseQuestion(
       type: type,
       part: part,
@@ -765,20 +773,57 @@ class SpacedRepetitionService {
     );
   }
 
-  static String _pickSingleSentence(String text, String wordEn) {
-    if (text.isEmpty) return '';
-    if (!text.contains('/')) return text.trim();
-    final parts = text.split('/').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-    if (parts.isEmpty) return text.trim();
-    return parts[math.Random().nextInt(parts.length)];
-  }
+  /// EN cümle, TR cümle ve TR anlam listesini aynı index ile seçer.
+  /// Kural: Cümle index = anlam index → her zaman tutarlı eşleşme.
+  static ({String sentenceEn, String sentenceTr, String matchedTrMeaning})
+      _pickPairedSentences({
+    required String enText,
+    required String trText,
+    required String trMeanings,
+  }) {
+    final enParts = enText.isEmpty
+        ? <String>[]
+        : enText.split('/').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    final trParts = trText.isEmpty
+        ? <String>[]
+        : trText.split('/').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    final meanings = trMeanings
+        .split('/')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
 
-  static String _pickSingleSentenceTr(String text, String wordTr) {
-    if (text.isEmpty) return '';
-    if (!text.contains('/')) return text.trim();
-    final parts = text.split('/').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-    if (parts.isEmpty) return text.trim();
-    return parts[math.Random().nextInt(parts.length)];
+    if (enParts.isEmpty && trParts.isEmpty) {
+      return (
+        sentenceEn: '',
+        sentenceTr: '',
+        matchedTrMeaning: meanings.isNotEmpty ? meanings.first : trMeanings,
+      );
+    }
+
+    // Kaç seçenek var: EN ve TR'nin minimumuyla sınırla
+    final maxIndex = (enParts.isNotEmpty && trParts.isNotEmpty)
+        ? math.min(enParts.length, trParts.length) - 1
+        : (enParts.isNotEmpty ? enParts.length - 1 : trParts.length - 1);
+
+    final idx = maxIndex >= 0 ? math.Random().nextInt(maxIndex + 1) : 0;
+
+    final selectedEn = enParts.isNotEmpty
+        ? (idx < enParts.length ? enParts[idx] : enParts.first)
+        : '';
+    final selectedTr = trParts.isNotEmpty
+        ? (idx < trParts.length ? trParts[idx] : trParts.first)
+        : '';
+
+    // Aynı index'teki TR anlamı; yoksa ilkini kullan
+    final matchedMeaning =
+        meanings.isNotEmpty ? (idx < meanings.length ? meanings[idx] : meanings.first) : trMeanings;
+
+    return (
+      sentenceEn: selectedEn,
+      sentenceTr: selectedTr,
+      matchedTrMeaning: matchedMeaning,
+    );
   }
 
   /// Aynı kelime arka arkaya gelmeyecek şekilde karıştırır.
