@@ -173,29 +173,27 @@ class SpacedRepetitionService {
   static final Map<int, DayProgress> _dayProgressCache = {};
 
   // ─── SRS Interval Tablosu ─────────────────────────────────────────────────
+  // Ebbinghaus: 0->1->3->7->14->30->60->120->365
   static const List<int> _intervals = [
-    0,   // Step 0: Yeni kelime, aynı gün
-    1,   // Step 1: Ertesi gün
-    2,   // Step 2: 2 gün sonra
-    4,   // Step 3: 4 gün sonra
-    7,   // Step 4: 1 hafta
-    14,  // Step 5: 2 hafta
-    30,  // Step 6: 1 ay
-    60,  // Step 7: 2 ay
-    120, // Step 8: 4 ay
-    365, // Step 9: 1 yıl (ustalaşmış)
+    0,   // Step 0: Ogrenme gunu (8 tekrar)
+    1,   // Step 1: 1 gun sonra (4 tekrar)
+    3,   // Step 2: 3 gun sonra (3 tekrar)
+    7,   // Step 3: 7 gun sonra (2 tekrar)
+    14,  // Step 4: 14 gun sonra (2 tekrar)
+    30,  // Step 5: 1 ay sonra (1 tekrar)
+    60,  // Step 6: 2 ay sonra (1 tekrar)
+    120, // Step 7: 4 ay sonra (1 tekrar)
+    365, // Step 8: 1 yil (mastered)
   ];
 
   // ─── Seans İçi Tekrar Sayısı (step'e göre) ───────────────────────────────
   /// Bir kelimenin bir seanste kaç kez tekrar edileceği (step'e göre azalır).
   static int getRepeatCount(int step) {
-    if (step == 0) return 8;
-    if (step == 1) return 6;
-    if (step == 2) return 5;
-    if (step == 3) return 4;
-    if (step == 4) return 3;
-    if (step == 5) return 2;
-    return 2; // step 6+
+    if (step == 0) return 8; // Ogrenme gunu
+    if (step == 1) return 4; // 1 gun sonra
+    if (step == 2) return 3; // 3 gun sonra
+    if (step == 3) return 2; // 7 gun sonra
+    return 2;                // 14+ gun: minimum 2
   }
 
   // ─── Dictionary Cache ─────────────────────────────────────────────────────
@@ -237,7 +235,7 @@ class SpacedRepetitionService {
 
   /// Her 5. gün tekrar günüdür (Gün 5, 10, 15, 20...).
   static DayType getDayType(int day) {
-    if (day % 5 == 0) return DayType.review;
+    if (day % 4 == 0) return DayType.review;
     return DayType.learning;
   }
 
@@ -585,13 +583,29 @@ class SpacedRepetitionService {
       await _ensureWordsForDay(day);
       final collection = _userWordsCollection();
       if (collection == null) return [];
-      final snap = await collection.where('assigned_day', isEqualTo: day).get();
-      return snap.docs
+
+      // Yeni kelimeler (bugüne atanan)
+      final newSnap = await collection.where('assigned_day', isEqualTo: day).get();
+      final newWords = newSnap.docs
           .map((doc) => SpacedWord.fromMap(doc.id, doc.data()))
           .take(newWordsPerDay)
           .toList();
+
+      // Due olan eski kelimeler (bugünden önceki, vadesi gelmiş)
+      final reviewSnap = await collection
+          .where('assigned_day', isLessThan: day)
+          .where('due_day', isLessThanOrEqualTo: day)
+          .get();
+      final reviewWords = reviewSnap.docs
+          .map((doc) => SpacedWord.fromMap(doc.id, doc.data()))
+          .toList()
+        ..sort((a, b) => a.step.compareTo(b.step)); // En düşük step önce
+
+      // Toplam yük: yeni + max 5 eski kelime
+      final combined = [...newWords, ...reviewWords.take(5)];
+      return combined;
     } else {
-      // Tekrar günü: önceki günlerin due olan kelimeleri
+      // Tekrar günü: sadece eskiler
       return getReviewWordsForDay(day);
     }
   }
