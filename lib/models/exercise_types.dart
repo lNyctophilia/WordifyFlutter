@@ -75,6 +75,10 @@ class ExerciseQuestion {
   /// Spaced repetition adımı.
   final int step;
 
+  /// Soru için seçilen cümleyle eşleşen Türkçe anlam (parantez görünümü için).
+  /// Validasyon için değil, sadece cümle içi gösterimde kullanılır.
+  final String matchedTrMeaning;
+
   ExerciseQuestion({
     required this.type,
     required this.part,
@@ -82,6 +86,7 @@ class ExerciseQuestion {
     required this.wordId,
     required this.wordEn,
     required this.wordTr,
+    required this.matchedTrMeaning,
     this.sentenceEn,
     this.sentenceTr,
     required this.step,

@@ -532,15 +532,13 @@ class _SessionPageState extends State<SessionPage>
   // ─── Tip 1: EN cümle + (Türkçe) → EN cevap ───────────────────────────────
 
   Widget _buildSentenceEnWithTrCard(ExerciseQuestion q, {Key? key}) {
-    // Cümle: "The doctor cared for the (hasta)."
-    // Parantez içinde Türkçe kelime olacak şekilde düzenle
+    // Cümle: "The doctor cared for the (hasta)." veya "She is very (sabırlı) with her children."
+    // Parantez içinde bu cümleyle eşleşen Türkçe anlam olacak
     String sentence = q.sentenceEn ?? '';
     if (sentence.isNotEmpty) {
-      // Orijinal İngilizce kelimeyi Türkçesiyle değiştir
-      final trWord = q.wordTr.split('/').first.trim();
       sentence = sentence.replaceAll(
         RegExp(r'\([^)]+\)'),
-        '($trWord)',
+        '(${q.matchedTrMeaning})',
       );
     }
 
@@ -613,13 +611,13 @@ class _SessionPageState extends State<SessionPage>
   // ─── Tip 4: TR cümle + (Türkçe) → EN cevap ──────────────────────────────
 
   Widget _buildSentenceTrWithTrCard(ExerciseQuestion q, {Key? key}) {
-    // Cümle: "Doktor (hasta) ile yakından ilgilendi."
+    // Cümle: "Doktor (hasta) ile yakından ilgilendi." veya "Çocuklarına karşı çok (sabırlı) davranır."
+    // Parantez içinde bu cümleyle eşleşen Türkçe anlam
     String sentence = q.sentenceTr ?? '';
     if (sentence.isNotEmpty) {
-      final trWord = q.wordTr.split('/').first.trim();
       sentence = sentence.replaceAll(
         RegExp(r'\([^)]+\)'),
-        '($trWord)',
+        '(${q.matchedTrMeaning})',
       );
     }
 

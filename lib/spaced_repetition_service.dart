@@ -720,6 +720,7 @@ class SpacedRepetitionService {
       wordId: q.wordId,
       wordEn: q.wordEn,
       wordTr: q.wordTr,
+      matchedTrMeaning: q.matchedTrMeaning,
       sentenceEn: q.sentenceEn,
       sentenceTr: q.sentenceTr,
       step: q.step,
@@ -759,7 +760,7 @@ class SpacedRepetitionService {
         : AnswerDirection.toTurkish;
 
     // wordTr → validasyon için tüm anlamlar korunur (hasta / sabırlı gibi)
-    // matchedTrMeaning → sadece cümle içi parantez görünümü için kullanıldı
+    // matchedTrMeaning → sadece cümle içi parantez görünümü için
     return ExerciseQuestion(
       type: type,
       part: part,
@@ -767,6 +768,7 @@ class SpacedRepetitionService {
       wordId: w.id,
       wordEn: w.wordEn,
       wordTr: w.wordTr,
+      matchedTrMeaning: matchedTrMeaning,
       sentenceEn: sentenceEn.isEmpty ? null : sentenceEn,
       sentenceTr: sentenceTr.isEmpty ? null : sentenceTr,
       step: w.step,
