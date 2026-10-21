@@ -299,7 +299,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
     if (confirmed == true && mounted) {
       await SpacedRepetitionService.resetDayProgress(day);
       if (mounted) {
-        _startSession(day, SessionPart.introduction);
+        _startSession(day, SessionPart.part1);
       }
     }
   }
@@ -337,11 +337,8 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
         return StreamBuilder<Map<String, int>>(
           stream: SpacedRepetitionService.getStatsStreamForDay(activeDay),
           builder: (context, snapshot) {
-            final stats = snapshot.data ?? {'review': 0, 'total_learned': 0};
-            final int reviewDue = stats['review'] ?? 0;
+            final stats = snapshot.data ?? {'total_learned': 0};
             final int totalLearned = stats['total_learned'] ?? 0;
-
-            const int currentNewGoal = SpacedRepetitionService.newWordsPerDay;
 
             return Scaffold(
               backgroundColor: const Color(0xFF0A1128),
@@ -493,52 +490,18 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                           const SizedBox(height: 20),
                           
                           // Main Task Card
-                          StreamBuilder<DayPartProgress>(
-                            stream: SpacedRepetitionService.getDayPartProgressStream(activeDay),
+                          StreamBuilder<DayProgress>(
+                            stream: SpacedRepetitionService.getDayProgressStream(activeDay),
                             builder: (context, partSnap) {
-                              final partProgress = partSnap.data ?? const DayPartProgress();
-                              final bool hasNoReview = reviewDue == 0;
-                              final bool isPart3Done =
-                                  partProgress.isPart3Complete(hasNoReviewWords: hasNoReview);
-                              final nextPartIdx =
-                                  partProgress.getNextPartIndex(hasNoReviewWords: hasNoReview);
-                              final allDone =
-                                  partProgress.isAllDone(hasNoReviewWords: hasNoReview);
-
-                              final bool isNewWordsDone =
-                                  partProgress.part1Completed && partProgress.part2Completed;
-                              final int newDone = isNewWordsDone
-                                  ? currentNewGoal
-                                  : (partProgress.part1Completed
-                                      ? (currentNewGoal / 2).ceil()
-                                      : 0);
-
-                              final int targetReviewGoal = isPart3Done
-                                  ? (partProgress.reviewCount > 0
-                                      ? partProgress.reviewCount
-                                      : reviewDue)
-                                  : reviewDue;
-                              final int currentReviewGoal = targetReviewGoal
-                                  .clamp(0, SpacedRepetitionService.maxReviewsPerDay);
-                              final int reviewDone = isPart3Done
-                                  ? currentReviewGoal
-                                  : 0;
-
-                              // Başlatılacak Part
-                              final parts = [
-                                SessionPart.introduction,
-                                SessionPart.deepening,
-                                SessionPart.review,
-                                if (partProgress.bonusNeeded) SessionPart.bonus,
-                              ];
-                              final nextPart = (nextPartIdx != null && nextPartIdx < parts.length)
-                                  ? parts[nextPartIdx]
-                                  : SessionPart.introduction;
+                              final dayProgress = partSnap.data ?? DayProgress(dayType: SpacedRepetitionService.getDayType(activeDay));
+                              final allDone = dayProgress.isCompleted;
+                              final nextPart = dayProgress.nextPart ?? SessionPart.part1;
+                              final completedParts = dayProgress.completedParts;
+                              final dayType = SpacedRepetitionService.getDayType(activeDay);
 
                               void startAction() {
                                 if (allDone) {
-                                  _showRestartConfirmationDialog(
-                                      context, activeDay);
+                                  _showRestartConfirmationDialog(context, activeDay);
                                 } else {
                                   _startSession(activeDay, nextPart);
                                 }
@@ -557,43 +520,58 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                 ),
                                 child: Column(
                                   children: [
-                                    Text(
-                                      'Gün $activeDay',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.5,
-                                      ),
+                                    // Gün başlığı + tip
+                                    Column(
+                                      children: [
+                                        Text(
+                                          'Gün $activeDay',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: dayType == DayType.review
+                                                ? const Color(0xFF00E676).withValues(alpha: 0.12)
+                                                : const Color(0xFF3A86FF).withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            dayType == DayType.review ? '🔄 Tekrar Günü' : '📘 Öğrenme Günü',
+                                            style: TextStyle(
+                                              color: dayType == DayType.review
+                                                  ? const Color(0xFF00E676)
+                                                  : const Color(0xFF3A86FF),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 20),
 
-                                    // Part durumları
+                                    // Part durumları (4 chip)
                                     _buildPartStatusRow(
-                                      partProgress: partProgress,
-                                      bonusNeeded: partProgress.bonusNeeded,
-                                      isPart3Done: isPart3Done,
+                                      completedParts: completedParts,
+                                      totalParts: dayProgress.totalParts,
                                     ),
 
                                     const SizedBox(height: 24),
 
-                                    // Progress Bars
+                                    // İlerleme çubuğu
                                     _buildProgressBar(
-                                      title: 'Yeni Kelimeler',
-                                      current: newDone,
-                                      total: currentNewGoal,
-                                      color: const Color(0xFF3A86FF),
-                                      icon: Icons.auto_awesome_rounded,
-                                      isCompleted: isNewWordsDone,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildProgressBar(
-                                      title: 'Tekrarlar',
-                                      current: reviewDone,
-                                      total: currentReviewGoal,
-                                      color: const Color(0xFF00E676),
-                                      icon: Icons.refresh_rounded,
-                                      isCompleted: isPart3Done,
+                                      title: 'Günlük İlerleme',
+                                      current: completedParts,
+                                      total: dayProgress.totalParts,
+                                      color: allDone ? const Color(0xFF00E676) : const Color(0xFF3A86FF),
+                                      icon: allDone ? Icons.check_circle_rounded : Icons.school_rounded,
+                                      isCompleted: allDone,
                                     ),
 
                                     const SizedBox(height: 28),
@@ -613,8 +591,8 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                                 begin: Alignment.topLeft,
                                                 end: Alignment.bottomRight,
                                               ),
-                                        ),
-                                        child: ElevatedButton(
+                                      ),
+                                      child: ElevatedButton(
                                         onPressed: startAction,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.transparent,
@@ -632,9 +610,9 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                             Text(
                                               allDone
                                                   ? 'Eğitimi Tekrarla'
-                                                  : nextPartIdx == 0
+                                                  : completedParts == 0
                                                       ? 'Eğitime Başla'
-                                                      : 'Devam Et',
+                                                      : 'Part ${completedParts + 1}\'den Devam Et',
                                               style: const TextStyle(
                                                 fontSize: 17,
                                                 fontWeight: FontWeight.bold,
@@ -652,7 +630,7 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
                                           ],
                                         ),
                                       ),
-                                      ),
+                                    ),
                                   ],
                                 ),
                               );
@@ -733,34 +711,33 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
   }
 
   Widget _buildPartStatusRow({
-    required DayPartProgress partProgress,
-    required bool bonusNeeded,
-    bool isPart3Done = false,
+    required int completedParts,
+    required int totalParts,
   }) {
-    final parts = [
-      (label: 'P1', done: partProgress.part1Completed, color: const Color(0xFF3A86FF)),
-      (label: 'P2', done: partProgress.part2Completed, color: const Color(0xFF7209B7)),
-      (label: 'P3', done: isPart3Done, color: const Color(0xFF00E676)),
-      if (bonusNeeded)
-        (label: 'Bonus', done: partProgress.bonusCompleted, color: const Color(0xFFFFB703)),
+    final partColors = [
+      const Color(0xFF3A86FF),
+      const Color(0xFF7209B7),
+      const Color(0xFF00E676),
+      const Color(0xFFFFB703),
     ];
+    final partLabels = ['P1', 'P2', 'P3', 'P4'];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        for (int i = 0; i < parts.length; i++) ...[
+        for (int i = 0; i < totalParts; i++) ...[
           _partChip(
-            label: parts[i].label,
-            done: parts[i].done,
-            color: parts[i].color,
+            label: partLabels[i],
+            done: i < completedParts,
+            color: partColors[i],
           ),
-          if (i < parts.length - 1)
+          if (i < totalParts - 1)
             Container(
               width: 20,
               height: 2,
               margin: const EdgeInsets.symmetric(horizontal: 4),
-              color: i < parts.length - 1 && parts[i].done
-                  ? parts[i].color.withValues(alpha: 0.5)
+              color: i < completedParts
+                  ? partColors[i].withValues(alpha: 0.5)
                   : const Color(0xFF1E2D4A),
             ),
         ],
@@ -792,8 +769,8 @@ class _WordifyHomePageState extends State<WordifyHomePage> {
             Container(
               width: 8,
               height: 8,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E2D4A),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E2D4A),
                 shape: BoxShape.circle,
               ),
             ),

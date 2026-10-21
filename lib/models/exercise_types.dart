@@ -1,68 +1,84 @@
 // Egzersiz tipleri ve seans yapısı modelleri
 
-/// Kullanıcıdan şık seçimi beklenmez, tüm tipler yazma tabanlıdır.
+/// 4 cümle bazlı soru tipi.
+/// Hiçbirinde salt kelime sorulmaz — her zaman cümle bağlamı vardır.
+/// Soru sırasında TTS yoktur. Sadece doğru cevap feedback ekranında
+/// İngilizce kelime seslendirilir.
 enum ExerciseType {
-  /// 1. Tanıtım kartı: Kelime EN+TR+örnek gösterilir, TTS otomatik okur.
-  ///    Kullanıcı sadece "Öğrendim" butonuna basar. Step değişmez.
-  flashcard,
+  /// Tip 1: İngilizce cümle + (Türkçe kelime) → İngilizce cevap
+  /// Örnek: "The doctor cared for the (hasta)." → "patient"
+  sentenceEnWithTr,
 
-  /// 2. Türkçe anlam gösterilir → kullanıcı İngilizcesini yazar.
-  trToEnWriting,
+  /// Tip 2: İngilizce cümle + (İngilizce kelime) → Türkçe cevap
+  /// Örnek: "The doctor cared for the (patient)." → "hasta"
+  sentenceEnWithEn,
 
-  /// 3. İngilizce kelime gösterilir + TTS okur → kullanıcı Türkçesini yazar.
-  enToTrWriting,
+  /// Tip 3: Türkçe cümle + (İngilizce kelime) → Türkçe cevap
+  /// Örnek: "Doktor (patient) ile yakından ilgilendi." → "hasta"
+  sentenceTrWithEn,
 
-  /// 4. İngilizce cümle boşluklu gösterilir (Türkçe cümle ipucu ile) → kullanıcı yazar.
-  clozeWriting,
-
-  /// 5. Sadece TTS ile kelime okunur, ekranda yazı yok → kullanıcı duyduğunu yazar.
-  listeningWriting,
-
-  /// 6. Türkçe anlam + ilk harf + uzunluk ipucu → kullanıcı yazar.
-  hintedWriting,
+  /// Tip 4: Türkçe cümle + (Türkçe kelime) → İngilizce cevap
+  /// Örnek: "Doktor (hasta) ile yakından ilgilendi." → "patient"
+  sentenceTrWithTr,
 }
 
-/// Günlük seansin 3 (+ opsiyonel bonus) bölümü.
+/// İstenen cevap dili.
+enum AnswerDirection {
+  /// Kullanıcıdan İngilizce kelime beklenir.
+  toEnglish,
+
+  /// Kullanıcıdan Türkçe anlam beklenir.
+  toTurkish,
+}
+
+/// Günlük seansin part'ları (1-4).
 enum SessionPart {
-  /// Part 1: 5 yeni kelimenin flashcard tanıtımı + TR→EN yazma turu.
-  introduction,
+  part1,
+  part2,
+  part3,
+  part4,
+}
 
-  /// Part 2: Aynı 5 kelime için EN→TR yazma + cümle boşluk turu.
-  deepening,
+/// Gün tipi: Yeni kelime öğrenme mi, yoksa eski tekrar mı.
+enum DayType {
+  /// Öğrenme günü: 5 yeni kelime, 4 part, ~40 soru.
+  learning,
 
-  /// Part 3: SRS'e göre due olan eski kelimeler — step'e göre zorluk.
+  /// Tekrar günü: SRS'e göre due olan eski kelimeler.
+  /// Her 5 günde bir (Gün 5, 10, 15...).
   review,
-
-  /// Bonus: Seans içinde 2+ kez yanlış bilinen kelimeler için ek tekrar.
-  bonus,
 }
 
 /// Bir soru kartını temsil eder.
 class ExerciseQuestion {
   final ExerciseType type;
   final SessionPart part;
+  final AnswerDirection direction;
 
-  /// Kelimenin Firestore'daki belgesi ID'si (kelime İngilizce).
+  /// Kelimenin Firestore'daki belgesi ID'si.
   final String wordId;
 
-  /// İngilizce kelime ya da kalıp.
+  /// İngilizce kelime.
   final String wordEn;
 
-  /// Türkçe anlam(lar). "/" ile birden fazla olabilir (ör. "hasta / sabırlı").
+  /// Türkçe anlam(lar). "/" ile birden fazla olabilir.
   final String wordTr;
 
-  /// İngilizce örnek cümle. Boşluk doldurmada _____ içerir.
+  /// İngilizce örnek cümle. Hedef kelimenin yerine
+  /// Tip 1'de (Türkçesi) veya Tip 2'de (İngilizcesi) parantez içinde gösterilir.
   final String? sentenceEn;
 
-  /// Türkçe örnek cümle (ipucu olarak gösterilir).
+  /// Türkçe örnek cümle. Hedef kelimenin yerine
+  /// Tip 3'te (İngilizcesi) veya Tip 4'te (Türkçesi) parantez içinde gösterilir.
   final String? sentenceTr;
 
-  /// Spaced repetition adımı (step) — egzersiz seçimi için.
+  /// Spaced repetition adımı.
   final int step;
 
   ExerciseQuestion({
     required this.type,
     required this.part,
+    required this.direction,
     required this.wordId,
     required this.wordEn,
     required this.wordTr,
@@ -70,13 +86,4 @@ class ExerciseQuestion {
     this.sentenceTr,
     required this.step,
   });
-
-  /// İlk harf + uzunluk ipucu (hintedWriting için).
-  String get hintText {
-    if (wordEn.isEmpty) return '';
-    return wordEn[0] + List.generate(wordEn.length - 1, (_) => ' _').join('');
-  }
-
-  /// Kelimenin okunacak formu (phrasal verb'lerde tam kalıp).
-  String get speakText => wordEn;
 }

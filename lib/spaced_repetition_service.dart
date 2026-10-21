@@ -69,119 +69,88 @@ class SpacedWord {
   }
 }
 
-/// Part tamamlanma durumu.
-class DayPartProgress {
-  final bool part1Completed;
-  final bool part2Completed;
-  final bool part3Completed;
-  final bool bonusNeeded;
-  final bool bonusCompleted;
-  final List<String> wrongWordsInSession;
-  final int currentPart;
-  final int reviewCount;
+/// Günlük seans ilerleme durumu (basitleştirilmiş).
+class DayProgress {
+  final int totalParts;
+  final int completedParts;
+  final DayType dayType;
+  final int correctCount;
+  final int totalAnswered;
 
-  const DayPartProgress({
-    this.part1Completed = false,
-    this.part2Completed = false,
-    this.part3Completed = false,
-    this.bonusNeeded = false,
-    this.bonusCompleted = false,
-    this.wrongWordsInSession = const [],
-    this.currentPart = 1,
-    this.reviewCount = 0,
+  const DayProgress({
+    this.totalParts = 4,
+    this.completedParts = 0,
+    this.dayType = DayType.learning,
+    this.correctCount = 0,
+    this.totalAnswered = 0,
   });
 
-  factory DayPartProgress.fromMap(Map<String, dynamic> data) {
-    final int curPart = (data['current_part'] ?? data['currentPart'] as num?)?.toInt() ?? 1;
-    final bool p1 = data['part1_completed'] == true ||
-        data['part1Completed'] == true ||
-        curPart >= 2;
-    final bool p2 = data['part2_completed'] == true ||
-        data['part2Completed'] == true ||
-        curPart >= 3;
-    final bool p3 = data['part3_completed'] == true ||
-        data['part3Completed'] == true ||
-        curPart >= 4;
-    final bool bNeeded =
-        data['bonus_needed'] == true || data['bonusNeeded'] == true;
-    final bool bDone =
-        data['bonus_completed'] == true || data['bonusCompleted'] == true;
+  bool get isCompleted => completedParts >= totalParts;
 
-    final int inferredPart = p2 ? (p3 ? 4 : 3) : (p1 ? 2 : 1);
+  bool isPartCompleted(SessionPart part) {
+    final partNum = sessionPartToNumber(part);
+    return completedParts >= partNum;
+  }
 
-    return DayPartProgress(
-      part1Completed: p1,
-      part2Completed: p2,
-      part3Completed: p3,
-      bonusNeeded: bNeeded,
-      bonusCompleted: bDone,
-      wrongWordsInSession: List<String>.from(
-          data['wrong_words_in_session'] ?? data['wrongWordsInSession'] ?? []),
-      currentPart: curPart > 1 ? curPart : inferredPart,
-      reviewCount:
-          (data['review_count'] ?? data['reviewCount'] as num?)?.toInt() ?? 0,
+  SessionPart? get nextPart {
+    if (completedParts >= totalParts) return null;
+    return numberToSessionPart(completedParts + 1);
+  }
+
+  DayProgress copyWith({
+    int? totalParts,
+    int? completedParts,
+    DayType? dayType,
+    int? correctCount,
+    int? totalAnswered,
+  }) {
+    return DayProgress(
+      totalParts: totalParts ?? this.totalParts,
+      completedParts: completedParts ?? this.completedParts,
+      dayType: dayType ?? this.dayType,
+      correctCount: correctCount ?? this.correctCount,
+      totalAnswered: totalAnswered ?? this.totalAnswered,
     );
   }
 
-  DayPartProgress copyWith({
-    bool? part1Completed,
-    bool? part2Completed,
-    bool? part3Completed,
-    bool? bonusNeeded,
-    bool? bonusCompleted,
-    List<String>? wrongWordsInSession,
-    int? currentPart,
-    int? reviewCount,
-  }) {
-    return DayPartProgress(
-      part1Completed: part1Completed ?? this.part1Completed,
-      part2Completed: part2Completed ?? this.part2Completed,
-      part3Completed: part3Completed ?? this.part3Completed,
-      bonusNeeded: bonusNeeded ?? this.bonusNeeded,
-      bonusCompleted: bonusCompleted ?? this.bonusCompleted,
-      wrongWordsInSession: wrongWordsInSession ?? this.wrongWordsInSession,
-      currentPart: currentPart ?? this.currentPart,
-      reviewCount: reviewCount ?? this.reviewCount,
+  factory DayProgress.fromMap(Map<String, dynamic> data) {
+    return DayProgress(
+      totalParts: (data['total_parts'] as num?)?.toInt() ?? 4,
+      completedParts: (data['completed_parts'] as num?)?.toInt() ?? 0,
+      dayType: data['day_type'] == 'review' ? DayType.review : DayType.learning,
+      correctCount: (data['correct_count'] as num?)?.toInt() ?? 0,
+      totalAnswered: (data['total_answered'] as num?)?.toInt() ?? 0,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'part1_completed': part1Completed,
-      'part2_completed': part2Completed,
-      'part3_completed': part3Completed,
-      'bonus_needed': bonusNeeded,
-      'bonus_completed': bonusCompleted,
-      'wrong_words_in_session': wrongWordsInSession,
-      'current_part': currentPart,
-      'currentPart': currentPart,
-      'review_count': reviewCount,
+      'total_parts': totalParts,
+      'completed_parts': completedParts,
+      'day_type': dayType == DayType.review ? 'review' : 'learning',
+      'correct_count': correctCount,
+      'total_answered': totalAnswered,
     };
   }
 
-  bool isPart3Complete({bool hasNoReviewWords = false}) =>
-      part3Completed ||
-      (part1Completed && part2Completed && hasNoReviewWords);
-
-  bool isAllDone({bool hasNoReviewWords = false}) =>
-      part1Completed &&
-      part2Completed &&
-      (part3Completed || hasNoReviewWords) &&
-      (!bonusNeeded || bonusCompleted);
-
-  bool get allDone => isAllDone();
-
-  /// Tamamlanmamış ilk Part indeksini döndürür (0-based).
-  /// Null: tüm part'lar bitti.
-  int? getNextPartIndex({bool hasNoReviewWords = false}) {
-    if (!part1Completed) return 0;
-    if (!part2Completed) return 1;
-    if (!part3Completed && !hasNoReviewWords) return 2;
-    if (bonusNeeded && !bonusCompleted) return 3;
-    return null;
+  static int sessionPartToNumber(SessionPart part) {
+    switch (part) {
+      case SessionPart.part1: return 1;
+      case SessionPart.part2: return 2;
+      case SessionPart.part3: return 3;
+      case SessionPart.part4: return 4;
+    }
   }
 
-  int? get nextPartIndex => getNextPartIndex();
+  static SessionPart? numberToSessionPart(int n) {
+    switch (n) {
+      case 1: return SessionPart.part1;
+      case 2: return SessionPart.part2;
+      case 3: return SessionPart.part3;
+      case 4: return SessionPart.part4;
+      default: return null;
+    }
+  }
 }
 
 class SpacedRepetitionService {
@@ -200,28 +169,34 @@ class SpacedRepetitionService {
     return _firestore.collection('users').doc(uid).collection('words');
   }
 
-  static CollectionReference<Map<String, dynamic>>? _dayProgressCollection() {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return null;
-    return _firestore.collection('users').doc(uid).collection('day_progress');
-  }
-
   static int _cachedDay = 1;
-  static final Map<int, DayPartProgress> _dayProgressCache = {};
+  static final Map<int, DayProgress> _dayProgressCache = {};
 
-  // ─── SRS Interval Tablosu ────────────────────────────────────────────────
-  /// Step → gün aralığı (daha uzun, daha kalıcı hafıza için).
+  // ─── SRS Interval Tablosu ─────────────────────────────────────────────────
   static const List<int> _intervals = [
     0,   // Step 0: Yeni kelime, aynı gün
     1,   // Step 1: Ertesi gün
-    3,   // Step 2: 3 gün sonra
-    7,   // Step 3: 1 hafta
-    14,  // Step 4: 2 hafta
-    30,  // Step 5: 1 ay
-    60,  // Step 6: 2 ay
-    120, // Step 7: 4 ay
-    365, // Step 8: 1 yıl (ustalaşmış)
+    2,   // Step 2: 2 gün sonra
+    4,   // Step 3: 4 gün sonra
+    7,   // Step 4: 1 hafta
+    14,  // Step 5: 2 hafta
+    30,  // Step 6: 1 ay
+    60,  // Step 7: 2 ay
+    120, // Step 8: 4 ay
+    365, // Step 9: 1 yıl (ustalaşmış)
   ];
+
+  // ─── Seans İçi Tekrar Sayısı (step'e göre) ───────────────────────────────
+  /// Bir kelimenin bir seanste kaç kez tekrar edileceği (step'e göre azalır).
+  static int getRepeatCount(int step) {
+    if (step == 0) return 8;
+    if (step == 1) return 6;
+    if (step == 2) return 5;
+    if (step == 3) return 4;
+    if (step == 4) return 3;
+    if (step == 5) return 2;
+    return 2; // step 6+
+  }
 
   // ─── Dictionary Cache ─────────────────────────────────────────────────────
   static Map<String, String>? _dictionary;
@@ -258,20 +233,12 @@ class SpacedRepetitionService {
     return _dictionary?[wordEn.toLowerCase().trim()];
   }
 
-  static List<String> getRandomDistractors(String correctWord, {int count = 3}) {
-    if (_allWordsList == null || _allWordsList!.length <= count) {
-      return ['example', 'target', 'word'];
-    }
-    final normalizedCorrect = correctWord.toLowerCase().trim();
-    final distractors = <String>{};
-    final random = math.Random();
-    while (distractors.length < count) {
-      final candidate = _allWordsList![random.nextInt(_allWordsList!.length)];
-      if (candidate != normalizedCorrect) {
-        distractors.add(candidate);
-      }
-    }
-    return distractors.toList();
+  // ─── Gün Tipi ─────────────────────────────────────────────────────────────
+
+  /// Her 5. gün tekrar günüdür (Gün 5, 10, 15, 20...).
+  static DayType getDayType(int day) {
+    if (day % 5 == 0) return DayType.review;
+    return DayType.learning;
   }
 
   // ─── Kullanıcı Profili ────────────────────────────────────────────────────
@@ -279,28 +246,19 @@ class SpacedRepetitionService {
   static Stream<Map<String, dynamic>> getUserProfileStream() {
     final doc = _userDoc();
     if (doc == null) {
-      return Stream.value({
-        'current_day': _cachedDay,
-        'streak': 0,
-      });
+      return Stream.value({'current_day': _cachedDay, 'streak': 0});
     }
 
     return doc.snapshots().map((snapshot) {
       final data = snapshot.data() ?? {};
       final streak = (data['streak'] as num?)?.toInt() ?? 0;
-
       final dbDay = (data['current_day'] as num?)?.toInt() ??
           (data['currentDay'] as num?)?.toInt();
       if (dbDay != null) _cachedDay = dbDay;
 
-      final currentPart =
-          (data['current_part'] ?? data['currentPart'] as num?)?.toInt() ?? 1;
-
       return {
         'current_day': _cachedDay,
         'currentDay': _cachedDay,
-        'current_part': currentPart,
-        'currentPart': currentPart,
         'streak': streak,
       };
     });
@@ -325,8 +283,7 @@ class SpacedRepetitionService {
       final lastDate = DateTime.tryParse(lastDateStr);
       if (lastDate != null) {
         final diff = DateTime(now.year, now.month, now.day)
-            .difference(
-                DateTime(lastDate.year, lastDate.month, lastDate.day))
+            .difference(DateTime(lastDate.year, lastDate.month, lastDate.day))
             .inDays;
         if (diff == 1) {
           streak += 1;
@@ -341,7 +298,6 @@ class SpacedRepetitionService {
     await doc.set({
       'streak': streak,
       'last_study_date': todayStr,
-      'weekly_activity': FieldValue.delete(),
     }, SetOptions(merge: true));
   }
 
@@ -384,12 +340,9 @@ class SpacedRepetitionService {
     final doc = _userDoc();
     if (doc != null) {
       try {
-        final dayProgress = await getDayPartProgress(safeDay);
         await doc.set({
           'current_day': safeDay,
           'currentDay': safeDay,
-          'current_part': dayProgress.currentPart,
-          'currentPart': dayProgress.currentPart,
           'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } catch (e) {
@@ -401,11 +354,11 @@ class SpacedRepetitionService {
 
   // ─── Kelime Yükleme ────────────────────────────────────────────────────────
 
-  /// Günlük 5 yeni kelime (eski 10'dan değiştirildi).
+  /// Günlük 5 yeni kelime.
   static const int newWordsPerDay = 5;
 
-  /// Günlük maksimum tekrar kelime sayısı.
-  static const int maxReviewsPerDay = 20;
+  /// Tekrar günlerinde maksimum kelime sayısı.
+  static const int maxReviewWordsPerDay = 20;
 
   static Future<void> initMockDataIfEmpty() async {
     await loadDictionaryIfNeeded();
@@ -414,6 +367,9 @@ class SpacedRepetitionService {
   }
 
   static Future<void> _ensureWordsForDay(int day) async {
+    // Tekrar günlerinde yeni kelime ekleme
+    if (getDayType(day) == DayType.review) return;
+
     await loadDictionaryIfNeeded();
     final collection = _userWordsCollection();
     if (collection == null) return;
@@ -431,8 +387,10 @@ class SpacedRepetitionService {
     }
 
     final List<String> lines = const LineSplitter().convert(fileText);
-    // 5 kelime/gün ile indeks hesaplaması
-    final startIndex = (day - 1) * newWordsPerDay;
+    // Tekrar günlerini atlayarak index hesapla
+    // Her 5 günden 4'ü öğrenme günü, bu yüzden kaçıncı öğrenme günü olduğunu bul
+    final learningDayIndex = _getLearningDayIndex(day);
+    final startIndex = learningDayIndex * newWordsPerDay;
     if (startIndex >= lines.length) return;
 
     final batch = _firestore.batch();
@@ -452,8 +410,8 @@ class SpacedRepetitionService {
         if (parts.length >= 4) {
           exampleTr = parts[2].trim();
           exampleEn = parts[3].trim();
-          // Parantez içi metni _____ ile değiştir
-          exampleEn = exampleEn.replaceAll(RegExp(r'\((.*?)\)'), '_____');
+          // Parantez içi metni kelime olarak koru (soru oluşturucuya lazım)
+          // Örnek: "(public) buildings" → kelimeyi ayıklayabiliriz
         }
 
         final docRef = collection.doc(wordEn);
@@ -477,109 +435,84 @@ class SpacedRepetitionService {
     if (added > 0) await batch.commit();
   }
 
+  /// [day] günün kaçıncı öğrenme günü olduğunu hesaplar (0-indexed).
+  /// Tekrar günleri (5, 10, 15...) atlanır.
+  static int _getLearningDayIndex(int day) {
+    int learningIndex = 0;
+    for (int d = 1; d < day; d++) {
+      if (getDayType(d) == DayType.learning) learningIndex++;
+    }
+    return learningIndex;
+  }
+
   // ─── Part Yönetimi ─────────────────────────────────────────────────────────
 
-  static Future<DayPartProgress> getDayPartProgress(int day) async {
+  static Future<DayProgress> getDayProgress(int day) async {
     if (_dayProgressCache.containsKey(day)) {
       return _dayProgressCache[day]!;
     }
+
+    final dayType = getDayType(day);
     final userDocRef = _userDoc();
     if (userDocRef != null) {
       try {
         final snap = await userDocRef.get();
         if (snap.exists && snap.data() != null) {
           final data = snap.data()!;
-          Map<String, dynamic>? dayMap;
-          final daysProgress = data['days_progress'];
-          if (daysProgress is Map && daysProgress['day_$day'] is Map) {
-            dayMap = Map<String, dynamic>.from(daysProgress['day_$day']);
-          }
-          dayMap ??= (data['day_${day}_progress'] is Map)
-              ? Map<String, dynamic>.from(data['day_${day}_progress'])
-              : null;
-
-          if (dayMap != null) {
-            final res = DayPartProgress.fromMap(dayMap);
+          final dayMap = data['day_progress']?['day_$day'];
+          if (dayMap is Map) {
+            final res = DayProgress.fromMap(Map<String, dynamic>.from(dayMap));
             _dayProgressCache[day] = res;
             return res;
           }
         }
       } catch (e) {
-        debugPrint('userDoc getDayPartProgress error: $e');
+        debugPrint('getDayProgress error: $e');
       }
     }
 
-    final col = _dayProgressCollection();
-    if (col != null) {
-      try {
-        final snap = await col.doc('day_$day').get();
-        if (snap.exists && snap.data() != null) {
-          final res = DayPartProgress.fromMap(snap.data()!);
-          _dayProgressCache[day] = res;
-          return res;
-        }
-      } catch (e) {
-        debugPrint('col getDayPartProgress error: $e');
-      }
-    }
-
-    return const DayPartProgress();
+    // Varsayılan: hiç tamamlanmamış
+    final defaultProgress = DayProgress(
+      totalParts: 4,
+      completedParts: 0,
+      dayType: dayType,
+    );
+    _dayProgressCache[day] = defaultProgress;
+    return defaultProgress;
   }
 
-  static Stream<DayPartProgress> getDayPartProgressStream(int day) {
+  static Stream<DayProgress> getDayProgressStream(int day) {
+    final dayType = getDayType(day);
     final userDocRef = _userDoc();
     if (userDocRef == null) {
-      return Stream.value(_dayProgressCache[day] ?? const DayPartProgress());
+      return Stream.value(_dayProgressCache[day] ?? DayProgress(dayType: dayType));
     }
 
     return userDocRef.snapshots().map((snap) {
       if (!snap.exists || snap.data() == null) {
-        return _dayProgressCache[day] ?? const DayPartProgress();
+        return _dayProgressCache[day] ?? DayProgress(dayType: dayType);
       }
       final data = snap.data()!;
-      Map<String, dynamic>? dayMap;
-      final daysProgress = data['days_progress'];
-      if (daysProgress is Map && daysProgress['day_$day'] is Map) {
-        dayMap = Map<String, dynamic>.from(daysProgress['day_$day']);
-      }
-      dayMap ??= (data['day_${day}_progress'] is Map)
-          ? Map<String, dynamic>.from(data['day_${day}_progress'])
-          : null;
-
-      if (dayMap != null) {
-        final res = DayPartProgress.fromMap(dayMap);
+      final dayMap = data['day_progress']?['day_$day'];
+      if (dayMap is Map) {
+        final res = DayProgress.fromMap(Map<String, dynamic>.from(dayMap));
         _dayProgressCache[day] = res;
         return res;
       }
-
-      return _dayProgressCache[day] ?? const DayPartProgress();
+      return _dayProgressCache[day] ?? DayProgress(dayType: dayType);
     }).handleError((error) {
-      debugPrint('getDayPartProgressStream error: $error');
-      return _dayProgressCache[day] ?? const DayPartProgress();
+      debugPrint('getDayProgressStream error: $error');
+      return _dayProgressCache[day] ?? DayProgress(dayType: dayType);
     });
   }
 
-  static int sessionPartToNumber(SessionPart part) {
-    switch (part) {
-      case SessionPart.introduction:
-        return 1;
-      case SessionPart.deepening:
-        return 2;
-      case SessionPart.review:
-        return 3;
-      case SessionPart.bonus:
-        return 4;
-    }
-  }
-
-  static Future<void> setCurrentPart(int day, SessionPart part) async {
-    final partNum = sessionPartToNumber(part);
-    _cachedDay = day;
-
-    final existing = _dayProgressCache[day];
-    if (existing != null) {
-      _dayProgressCache[day] = existing.copyWith(currentPart: partNum);
-    }
+  static Future<void> markPartCompleted(int day, SessionPart part) async {
+    final partNum = DayProgress.sessionPartToNumber(part);
+    final existing = _dayProgressCache[day] ?? DayProgress(dayType: getDayType(day));
+    final updated = existing.copyWith(
+      completedParts: math.max(existing.completedParts, partNum),
+    );
+    _dayProgressCache[day] = updated;
 
     final userDocRef = _userDoc();
     if (userDocRef != null) {
@@ -587,188 +520,38 @@ class SpacedRepetitionService {
         await userDocRef.set({
           'current_day': day,
           'currentDay': day,
-          'current_part': partNum,
-          'currentPart': partNum,
-          'current_part_name': part.name,
+          'day_progress': {
+            'day_$day': updated.toMap(),
+          },
           'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } catch (e) {
-        debugPrint('setCurrentPart userDoc error: $e');
-      }
-    }
-
-    final col = _dayProgressCollection();
-    if (col != null) {
-      try {
-        await col.doc('day_$day').set({
-          'current_part': partNum,
-          'currentPart': partNum,
-          'current_part_name': part.name,
-          'updated_at': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      } catch (_) {}
-    }
-  }
-
-  static Future<void> markPartCompleted(
-    int day,
-    SessionPart part, {
-    int? reviewCount,
-  }) async {
-    final Map<String, dynamic> update = {};
-    int nextPartNum = 1;
-    switch (part) {
-      case SessionPart.introduction:
-        update['part1_completed'] = true;
-        nextPartNum = 2;
-        break;
-      case SessionPart.deepening:
-        update['part2_completed'] = true;
-        nextPartNum = 3;
-        break;
-      case SessionPart.review:
-        update['part3_completed'] = true;
-        nextPartNum = 4;
-        if (reviewCount != null) {
-          update['review_count'] = reviewCount;
-        }
-        break;
-      case SessionPart.bonus:
-        update['bonus_completed'] = true;
-        nextPartNum = 4;
-        break;
-    }
-
-    update['current_part'] = nextPartNum;
-    update['currentPart'] = nextPartNum;
-    update['updated_at'] = FieldValue.serverTimestamp();
-
-    // 1. Önce in-memory cache'i hemen güncelle
-    final existing = _dayProgressCache[day] ?? const DayPartProgress();
-    _dayProgressCache[day] = existing.copyWith(
-      part1Completed:
-          part == SessionPart.introduction ? true : existing.part1Completed,
-      part2Completed:
-          part == SessionPart.deepening ? true : existing.part2Completed,
-      part3Completed:
-          part == SessionPart.review ? true : existing.part3Completed,
-      bonusCompleted:
-          part == SessionPart.bonus ? true : existing.bonusCompleted,
-      currentPart: nextPartNum,
-      reviewCount: reviewCount ?? existing.reviewCount,
-    );
-
-    // 2. userDoc'a kaydet (güvenli ve yetkisi kesin olan doküman)
-    final userDocRef = _userDoc();
-    if (userDocRef != null) {
-      try {
-        await userDocRef.set({
-          'current_day': day,
-          'currentDay': day,
-          'current_part': nextPartNum,
-          'currentPart': nextPartNum,
-          'days_progress': {
-            'day_$day': update,
-          },
-          'day_${day}_progress': update,
-          'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('userDoc markPartCompleted error: $e');
-      }
-    }
-
-    // 3. Subcollection'a da kaydetmeyi dene
-    final col = _dayProgressCollection();
-    if (col != null) {
-      try {
-        await col.doc('day_$day').set(update, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('col markPartCompleted error: $e');
+        debugPrint('markPartCompleted error: $e');
       }
     }
   }
 
-  static Future<void> updateWrongWordsInSession(
-      int day, List<String> wrongWords) async {
-    final bonusNeeded = wrongWords.length >= 2;
-    final existing = _dayProgressCache[day] ?? const DayPartProgress();
-    _dayProgressCache[day] = existing.copyWith(
-      wrongWordsInSession: wrongWords,
-      bonusNeeded: bonusNeeded,
-    );
-
-    final payload = {
-      'wrong_words_in_session': wrongWords,
-      'bonus_needed': bonusNeeded,
-    };
-
-    final userDocRef = _userDoc();
-    if (userDocRef != null) {
-      try {
-        await userDocRef.set({
-          'days_progress': {
-            'day_$day': payload,
-          },
-          'day_${day}_progress': payload,
-        }, SetOptions(merge: true));
-      } catch (_) {}
-    }
-
-    final col = _dayProgressCollection();
-    if (col != null) {
-      try {
-        await col.doc('day_$day').set(payload, SetOptions(merge: true));
-      } catch (_) {}
-    }
-  }
-
-  /// Belirtilen günün tüm verilerini sıfırlar (tekrar baştan başlatma için).
   static Future<void> resetDayProgress(int day) async {
-    _dayProgressCache[day] = const DayPartProgress();
+    final dayType = getDayType(day);
+    _dayProgressCache[day] = DayProgress(dayType: dayType);
 
-    final resetUpdate = {
-      'part1_completed': false,
-      'part2_completed': false,
-      'part3_completed': false,
-      'bonus_needed': false,
-      'bonus_completed': false,
-      'wrong_words_in_session': <String>[],
-      'current_part': 1,
-      'currentPart': 1,
-      'review_count': 0,
-      'updated_at': FieldValue.serverTimestamp(),
-    };
-
-    // 1. userDoc'u sıfırla
     final userDocRef = _userDoc();
     if (userDocRef != null) {
       try {
         await userDocRef.set({
           'current_day': day,
           'currentDay': day,
-          'current_part': 1,
-          'currentPart': 1,
-          'days_progress': {
-            'day_$day': resetUpdate,
+          'day_progress': {
+            'day_$day': DayProgress(dayType: dayType).toMap(),
           },
-          'day_${day}_progress': resetUpdate,
           'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } catch (e) {
-        debugPrint('userDoc resetDayProgress error: $e');
+        debugPrint('resetDayProgress error: $e');
       }
     }
 
-    // 2. Subcollection'ı sıfırla
-    final col = _dayProgressCollection();
-    if (col != null) {
-      try {
-        await col.doc('day_$day').set(resetUpdate);
-      } catch (_) {}
-    }
-
-    // 3. Günün kelimelerini sıfırla
+    // Günün kelimelerini sıfırla
     final wordsCol = _userWordsCollection();
     if (wordsCol != null) {
       try {
@@ -785,49 +568,36 @@ class SpacedRepetitionService {
             'next_review_date': Timestamp.fromDate(DateTime.now()),
           });
         }
-
-        final reviewSnap =
-            await wordsCol.where('last_reviewed_day', isEqualTo: day).get();
-        for (var doc in reviewSnap.docs) {
-          if (doc.data()['assigned_day'] != day) {
-            batch.update(doc.reference, {
-              'due_day': day,
-              'next_review_date': Timestamp.fromDate(DateTime.now()),
-              'last_reviewed_day': FieldValue.delete(),
-            });
-          }
-        }
-
         await batch.commit();
       } catch (e) {
-        debugPrint('words resetDayProgress error: $e');
+        debugPrint('resetDayProgress words error: $e');
       }
     }
   }
 
-  // ─── Seans Kelime Getirme ─────────────────────────────────────────────────
+  // ─── Kelime Getirme ────────────────────────────────────────────────────────
 
-  /// [day] için Part 1+2'de kullanılacak yeni kelimeleri döndürür.
-  static Future<List<SpacedWord>> getNewWordsForDay(int day) async {
+  static Future<List<SpacedWord>> getWordsForDay(int day) async {
     await loadDictionaryIfNeeded();
-    await _ensureWordsForDay(day);
+    final dayType = getDayType(day);
 
-    final collection = _userWordsCollection();
-    if (collection == null) return [];
-
-    final snap =
-        await collection.where('assigned_day', isEqualTo: day).get();
-    return snap.docs
-        .map((doc) => SpacedWord.fromMap(doc.id, doc.data()))
-        .take(newWordsPerDay)
-        .toList();
+    if (dayType == DayType.learning) {
+      await _ensureWordsForDay(day);
+      final collection = _userWordsCollection();
+      if (collection == null) return [];
+      final snap = await collection.where('assigned_day', isEqualTo: day).get();
+      return snap.docs
+          .map((doc) => SpacedWord.fromMap(doc.id, doc.data()))
+          .take(newWordsPerDay)
+          .toList();
+    } else {
+      // Tekrar günü: önceki günlerin due olan kelimeleri
+      return getReviewWordsForDay(day);
+    }
   }
 
-  /// [day] için Part 3'te kullanılacak tekrar kelimelerini döndürür.
-  /// Step'e göre sıralanır: düşük step önce (daha zor, daha az pekişmiş).
   static Future<List<SpacedWord>> getReviewWordsForDay(int day) async {
     await loadDictionaryIfNeeded();
-
     final collection = _userWordsCollection();
     if (collection == null) return [];
 
@@ -836,54 +606,205 @@ class SpacedRepetitionService {
 
     for (var doc in snap.docs) {
       final w = SpacedWord.fromMap(doc.id, doc.data());
-      // Önceki günlerin kelimelerinden due olanlar
       if (w.assignedDay < day && w.dueDay <= day) {
         reviewWords.add(w);
       }
     }
 
-    // Step'e göre sırala (düşük step → daha fazla tekrar ihtiyacı)
     reviewWords.sort((a, b) => a.step.compareTo(b.step));
-    return reviewWords.take(maxReviewsPerDay).toList();
+    return reviewWords.take(maxReviewWordsPerDay).toList();
   }
 
-  /// Eski `getSessionForDay` — geriye dönük uyumluluk için korunur.
-  static Future<List<SpacedWord>> getSessionForDay(int activeDay) async {
-    await loadDictionaryIfNeeded();
-    await _ensureWordsForDay(activeDay);
+  // ─── Soru Oluşturma ────────────────────────────────────────────────────────
 
-    final collection = _userWordsCollection();
-    if (collection == null) return [];
+  /// Belirli bir part için soru listesi oluşturur.
+  /// Her kelime 2 kez görülür: 1 EN cevap + 1 TR cevap.
+  static List<ExerciseQuestion> buildPartQuestions(
+    List<SpacedWord> words,
+    SessionPart part,
+  ) {
+    final random = math.Random();
+    final List<ExerciseQuestion> questions = [];
 
-    final snapshot = await collection.get();
-    List<SpacedWord> newWords = [];
-    List<SpacedWord> reviewWords = [];
+    // EN cevap isteyen tipler: sentenceEnWithTr (Tip1), sentenceTrWithTr (Tip4)
+    // TR cevap isteyen tipler: sentenceEnWithEn (Tip2), sentenceTrWithEn (Tip3)
+    final enAnswerTypes = [ExerciseType.sentenceEnWithTr, ExerciseType.sentenceTrWithTr];
+    final trAnswerTypes = [ExerciseType.sentenceEnWithEn, ExerciseType.sentenceTrWithEn];
 
-    for (var doc in snapshot.docs) {
-      final w = SpacedWord.fromMap(doc.id, doc.data());
-      if (w.assignedDay == activeDay && w.dueDay <= activeDay) {
-        newWords.add(w);
-      } else if (w.assignedDay < activeDay && w.dueDay <= activeDay) {
-        reviewWords.add(w);
+    for (final word in words) {
+      // Cümle yoksa fallback: her iki yön de mevcut tipleri kullanır ama
+      // cümlesiz kelimeler için bir tip seçebiliriz (başka cümle tipini dene)
+      final hasSentence = (word.exampleSentence ?? '').isNotEmpty &&
+          (word.exampleTr ?? '').isNotEmpty;
+
+      // EN cevap sorusu
+      ExerciseType enType;
+      if (hasSentence) {
+        enType = enAnswerTypes[random.nextInt(enAnswerTypes.length)];
+      } else {
+        enType = ExerciseType.sentenceTrWithTr; // TR cümle yok ise EN cümle zorla
+        // Eğer EN cümlesi de yoksa, tip1 ile zorlama (wordTr parantez içinde gösterilir)
+        enType = ExerciseType.sentenceEnWithTr;
+      }
+
+      // TR cevap sorusu
+      ExerciseType trType;
+      if (hasSentence) {
+        trType = trAnswerTypes[random.nextInt(trAnswerTypes.length)];
+      } else {
+        trType = ExerciseType.sentenceEnWithEn;
+      }
+
+      questions.add(_makeQuestion(word, enType, part));
+      questions.add(_makeQuestion(word, trType, part));
+    }
+
+    // Karıştır, aynı kelime arka arkaya gelmesin
+    _shuffleNoConsecutive(questions, random);
+    return questions;
+  }
+
+  /// Tüm seans sorularını oluşturur (tek part için değil, tam gün için,
+  /// part bazlı bölünmeden önce kullanılır).
+  /// Her kelime getRepeatCount(step) kadar tekrar eder.
+  static List<ExerciseQuestion> buildAllSessionQuestions(
+    List<SpacedWord> words,
+    SessionPart part,
+  ) {
+    final random = math.Random();
+    final List<ExerciseQuestion> questions = [];
+
+    final enAnswerTypes = [ExerciseType.sentenceEnWithTr, ExerciseType.sentenceTrWithTr];
+    final trAnswerTypes = [ExerciseType.sentenceEnWithEn, ExerciseType.sentenceTrWithEn];
+
+    for (final word in words) {
+      final repeatCount = getRepeatCount(word.step);
+      final halfCount = repeatCount ~/ 2;
+      final enCount = halfCount;
+      final trCount = repeatCount - halfCount; // remainder goes to TR
+
+      final hasSentence = (word.exampleSentence ?? '').isNotEmpty &&
+          (word.exampleTr ?? '').isNotEmpty;
+
+      for (int i = 0; i < enCount; i++) {
+        ExerciseType type;
+        if (hasSentence) {
+          type = enAnswerTypes[random.nextInt(enAnswerTypes.length)];
+        } else {
+          type = ExerciseType.sentenceEnWithTr;
+        }
+        questions.add(_makeQuestion(word, type, part));
+      }
+
+      for (int i = 0; i < trCount; i++) {
+        ExerciseType type;
+        if (hasSentence) {
+          type = trAnswerTypes[random.nextInt(trAnswerTypes.length)];
+        } else {
+          type = ExerciseType.sentenceEnWithEn;
+        }
+        questions.add(_makeQuestion(word, type, part));
       }
     }
 
-    newWords = newWords.take(newWordsPerDay).toList();
-    reviewWords = reviewWords.take(maxReviewsPerDay).toList();
-
-    final allWords = [...newWords, ...reviewWords];
-    allWords.shuffle();
-    return allWords;
+    _shuffleNoConsecutive(questions, random);
+    return questions;
   }
 
-  // ─── Egzersiz Tipi Belirleme ───────────────────────────────────────────────
+  /// Yanlış bilinen soruyu tekrar kuyruğuna eklemek için yeni soru oluşturur.
+  static ExerciseQuestion buildRetryQuestion(ExerciseQuestion q, SessionPart part) {
+    return ExerciseQuestion(
+      type: q.type,
+      part: part,
+      direction: q.direction,
+      wordId: q.wordId,
+      wordEn: q.wordEn,
+      wordTr: q.wordTr,
+      sentenceEn: q.sentenceEn,
+      sentenceTr: q.sentenceTr,
+      step: q.step,
+    );
+  }
 
-  /// [step] seviyesine göre Part 3 için uygun egzersiz tipini döndürür.
-  static ExerciseType getExerciseTypeForStep(int step) {
-    if (step <= 1) return ExerciseType.hintedWriting;
-    if (step <= 3) return ExerciseType.trToEnWriting;
-    if (step <= 5) return ExerciseType.clozeWriting;
-    return ExerciseType.listeningWriting;
+  static ExerciseQuestion _makeQuestion(
+      SpacedWord w, ExerciseType type, SessionPart part) {
+    String sentenceEn = _pickSingleSentence(w.exampleSentence ?? '', w.wordEn);
+    String sentenceTr = _pickSingleSentenceTr(w.exampleTr ?? '', w.wordTr);
+
+    // Parantez içindeki kelimeleri düzelt — asset'te zaten parantezli format var
+    // Örnek: "The doctor cared for the (patient)." → zaten parantezli
+    // Eğer parantez yoksa, kelimeyi parantezle çevreleyerek ekle
+    if (sentenceEn.isNotEmpty && !sentenceEn.contains('(')) {
+      sentenceEn = sentenceEn.replaceAll(
+        RegExp(RegExp.escape(w.wordEn), caseSensitive: false),
+        '(${w.wordEn})',
+      );
+    }
+    if (sentenceTr.isNotEmpty && !sentenceTr.contains('(')) {
+      sentenceTr = sentenceTr.replaceAll(
+        RegExp(RegExp.escape(w.wordTr.split('/').first.trim()), caseSensitive: false),
+        '(${w.wordTr.split('/').first.trim()})',
+      );
+    }
+
+    final direction = (type == ExerciseType.sentenceEnWithTr ||
+            type == ExerciseType.sentenceTrWithTr)
+        ? AnswerDirection.toEnglish
+        : AnswerDirection.toTurkish;
+
+    return ExerciseQuestion(
+      type: type,
+      part: part,
+      direction: direction,
+      wordId: w.id,
+      wordEn: w.wordEn,
+      wordTr: w.wordTr,
+      sentenceEn: sentenceEn.isEmpty ? null : sentenceEn,
+      sentenceTr: sentenceTr.isEmpty ? null : sentenceTr,
+      step: w.step,
+    );
+  }
+
+  static String _pickSingleSentence(String text, String wordEn) {
+    if (text.isEmpty) return '';
+    if (!text.contains('/')) return text.trim();
+    final parts = text.split('/').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return text.trim();
+    return parts[math.Random().nextInt(parts.length)];
+  }
+
+  static String _pickSingleSentenceTr(String text, String wordTr) {
+    if (text.isEmpty) return '';
+    if (!text.contains('/')) return text.trim();
+    final parts = text.split('/').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return text.trim();
+    return parts[math.Random().nextInt(parts.length)];
+  }
+
+  /// Aynı kelime arka arkaya gelmeyecek şekilde karıştırır.
+  static void _shuffleNoConsecutive(
+      List<ExerciseQuestion> questions, math.Random random) {
+    questions.shuffle(random);
+    // Max 10 deneme
+    for (int attempt = 0; attempt < 10; attempt++) {
+      bool hasConsecutive = false;
+      for (int i = 1; i < questions.length; i++) {
+        if (questions[i].wordId == questions[i - 1].wordId) {
+          hasConsecutive = true;
+          // Sonraki farklı kelimeyi bul ve swap yap
+          for (int j = i + 1; j < questions.length; j++) {
+            if (questions[j].wordId != questions[i - 1].wordId) {
+              final tmp = questions[i];
+              questions[i] = questions[j];
+              questions[j] = tmp;
+              break;
+            }
+          }
+          break;
+        }
+      }
+      if (!hasConsecutive) break;
+    }
   }
 
   // ─── İlerleme Güncelleme ─────────────────────────────────────────────────
@@ -910,14 +831,13 @@ class SpacedRepetitionService {
       if (isCorrect) {
         if (step < _intervals.length - 1) step++;
       } else {
-        // Yanlışta 2 adım geri (planlandığı gibi)
         step = (step > 2) ? step - 2 : 0;
         wrongCount++;
       }
 
       final intervalDays = _intervals[step];
       final nextDueDay = day + (isCorrect ? intervalDays : 1);
-      final mastered = step >= 6;
+      final mastered = step >= 7;
 
       transaction.update(docRef, {
         'step': step,
@@ -967,7 +887,7 @@ class SpacedRepetitionService {
 
       return {
         'new': math.min(newDue, newWordsPerDay),
-        'review': math.min(reviewDue, maxReviewsPerDay),
+        'review': math.min(reviewDue, maxReviewWordsPerDay),
         'total_learned': totalLearned,
         'total_words': totalWords,
       };
@@ -982,9 +902,7 @@ class SpacedRepetitionService {
 
     final userDoc = _firestore.collection('users').doc(uid);
     final wordsCol = userDoc.collection('words');
-    final progressCol = userDoc.collection('day_progress');
 
-    // 1. Kelime dokümanlarını sil
     try {
       final wordSnap = await wordsCol.get();
       const int chunkSize = 400;
@@ -1003,25 +921,6 @@ class SpacedRepetitionService {
       debugPrint('wordsCol reset error: $e');
     }
 
-    // 2. Gün ilerleme alt koleksiyonunu sil (izin yoksa bile akışı bozmaz)
-    try {
-      final progressSnap = await progressCol.get();
-      const int chunkSize = 400;
-      for (int i = 0; i < progressSnap.docs.length; i += chunkSize) {
-        final chunk = progressSnap.docs.sublist(
-          i,
-          math.min(i + chunkSize, progressSnap.docs.length),
-        );
-        final batch = _firestore.batch();
-        for (final doc in chunk) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-      }
-    } catch (e) {
-      debugPrint('progressCol reset error: $e');
-    }
-
     _cachedDay = 1;
     _dayProgressCache.clear();
 
@@ -1034,24 +933,23 @@ class SpacedRepetitionService {
       'last_word_index': 0,
       'current_day': 1,
       'currentDay': 1,
-      'current_part': 1,
-      'currentPart': 1,
-      'current_part_name': 'introduction',
-      'days_progress': {},
+      'day_progress': {},
       'streak': 0,
-      'weekly_activity': FieldValue.delete(),
       'last_study_date': null,
       'lastProgressUpdatedAt': FieldValue.serverTimestamp(),
     };
 
     if (userSnap != null && userSnap.exists && userSnap.data() != null) {
+      // Eski part bazlı alanları temizle
       for (final key in userSnap.data()!.keys) {
         if (key.startsWith('day_') && key.endsWith('_progress')) {
           resetPayload[key] = FieldValue.delete();
         }
+        if (key == 'days_progress') {
+          resetPayload[key] = FieldValue.delete();
+        }
       }
     } else {
-      // Eğer doküman henüz yoksa create kurallarını karşılayacak alanları ekle
       resetPayload['uid'] = uid;
       resetPayload['email'] = _auth.currentUser?.email ?? '';
       resetPayload['displayName'] = _auth.currentUser?.displayName ?? '';

@@ -8,112 +8,6 @@ import 'utils/sound_service.dart';
 import 'utils/tts_service.dart';
 import 'utils/answer_validator.dart';
 
-// ─── Session Question Builder ──────────────────────────────────────────────
-
-List<ExerciseQuestion> buildPart1Questions(List<SpacedWord> words) {
-  final List<ExerciseQuestion> qs = [];
-  // 1a) Flashcard tanıtım
-  for (final w in words) {
-    qs.add(_makeQuestion(w, ExerciseType.flashcard, SessionPart.introduction));
-  }
-  // 1b) TR→EN yazma
-  final shuffled = List<SpacedWord>.from(words)..shuffle();
-  for (final w in shuffled) {
-    qs.add(_makeQuestion(w, ExerciseType.trToEnWriting, SessionPart.introduction));
-  }
-  return qs;
-}
-
-List<ExerciseQuestion> buildPart2Questions(List<SpacedWord> words) {
-  final List<ExerciseQuestion> qs = [];
-  final s1 = List<SpacedWord>.from(words)..shuffle();
-  for (final w in s1) {
-    qs.add(_makeQuestion(w, ExerciseType.enToTrWriting, SessionPart.deepening));
-  }
-  final s2 = List<SpacedWord>.from(words)..shuffle();
-  for (final w in s2) {
-    // Cümle yoksa TR→EN fallback
-    final hasSentence = (w.exampleSentence ?? '').isNotEmpty &&
-        (w.exampleSentence ?? '').contains('_____');
-    final type = hasSentence ? ExerciseType.clozeWriting : ExerciseType.trToEnWriting;
-    qs.add(_makeQuestion(w, type, SessionPart.deepening));
-  }
-  return qs;
-}
-
-List<ExerciseQuestion> buildPart3Questions(List<SpacedWord> words) {
-  return words.map((w) {
-    final type = SpacedRepetitionService.getExerciseTypeForStep(w.step);
-    return _makeQuestion(w, type, SessionPart.review);
-  }).toList();
-}
-
-List<ExerciseQuestion> buildBonusQuestions(List<SpacedWord> words) {
-  return words.map((w) =>
-      _makeQuestion(w, ExerciseType.trToEnWriting, SessionPart.bonus)).toList();
-}
-
-String _pickSingleSentence(String text) {
-  if (!text.contains('/')) return text.trim();
-  final parts =
-      text.split('/').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-  if (parts.isEmpty) return text.trim();
-  return parts[Random().nextInt(parts.length)];
-}
-
-ExerciseQuestion _makeQuestion(
-    SpacedWord w, ExerciseType type, SessionPart part) {
-  String sentenceEn = (w.exampleSentence ?? '').trim();
-  String sentenceTr = (w.exampleTr ?? '').trim();
-
-  // Çoklu cümle varsa ("/" ile ayrılmış), TR ve EN uyumlu olacak şekilde rastgele birini seç
-  if (sentenceEn.contains('/') && sentenceTr.contains('/')) {
-    final enParts = sentenceEn
-        .split('/')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    final trParts = sentenceTr
-        .split('/')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-
-    if (enParts.isNotEmpty && enParts.length == trParts.length) {
-      final index = Random().nextInt(enParts.length);
-      sentenceEn = enParts[index];
-      sentenceTr = trParts[index];
-    } else if (enParts.isNotEmpty) {
-      final index = Random().nextInt(enParts.length);
-      sentenceEn = enParts[index];
-      if (trParts.isNotEmpty) {
-        sentenceTr = trParts[min(index, trParts.length - 1)];
-      }
-    }
-  } else if (sentenceEn.contains('/')) {
-    sentenceEn = _pickSingleSentence(sentenceEn);
-  } else if (sentenceTr.contains('/')) {
-    sentenceTr = _pickSingleSentence(sentenceTr);
-  }
-
-  // Boşluk işareti normalizasyonu
-  if (sentenceEn.isNotEmpty && !sentenceEn.contains('_____')) {
-    sentenceEn = sentenceEn.replaceAll(
-        RegExp(RegExp.escape(w.wordEn), caseSensitive: false), '_____');
-  }
-
-  return ExerciseQuestion(
-    type: type,
-    part: part,
-    wordId: w.id,
-    wordEn: w.wordEn,
-    wordTr: w.wordTr,
-    sentenceEn: sentenceEn.isEmpty ? null : sentenceEn,
-    sentenceTr: sentenceTr.isEmpty ? null : sentenceTr,
-    step: w.step,
-  );
-}
-
 // ─── SessionPage ───────────────────────────────────────────────────────────
 
 class SessionPage extends StatefulWidget {
@@ -123,7 +17,7 @@ class SessionPage extends StatefulWidget {
   const SessionPage({
     super.key,
     this.day = 1,
-    this.part = SessionPart.introduction,
+    this.part = SessionPart.part1,
   });
 
   @override
@@ -133,7 +27,7 @@ class SessionPage extends StatefulWidget {
 class _SessionPageState extends State<SessionPage>
     with SingleTickerProviderStateMixin {
   List<ExerciseQuestion> _questions = [];
-  List<SpacedWord> _newWords = [];
+  List<SpacedWord> _words = [];
   bool _isLoading = true;
   bool _isPartFinished = false;
 
@@ -143,12 +37,8 @@ class _SessionPageState extends State<SessionPage>
 
   bool _showFeedback = false;
   bool _isCorrect = false;
-  String? _selectedAnswer;
+  String? _selectedAnswer = '';
   String? _falseFriendNote;
-
-  // Seans içinde yanlış bilinen kelimeler (bonus için)
-  final Map<String, int> _wrongCountMap = {};
-  bool _noReviewForPart3 = false;
 
   final TextEditingController _textController = TextEditingController();
   FocusNode _focusNode = FocusNode();
@@ -158,9 +48,8 @@ class _SessionPageState extends State<SessionPage>
   bool _correctStroke = false;
   bool _wrongStroke = false;
 
-  // Dinleme modunda kelimeyi kaç kez dinledi
-  int _listenCount = 0;
-  static const int _maxListenCount = 3;
+  // Seans içinde yanlış bilinen kelimeler (bonus için)
+  final Map<String, int> _wrongCountMap = {};
 
   @override
   void initState() {
@@ -186,55 +75,25 @@ class _SessionPageState extends State<SessionPage>
     super.dispose();
   }
 
-  void _continueFromFinished() {
-    final bool hasNextPart = !(widget.part == SessionPart.review ||
-        widget.part == SessionPart.bonus ||
-        _noReviewForPart3);
-
-    if (!hasNextPart) {
-      Navigator.of(context).pop();
-    } else {
-      final nextPart = widget.part == SessionPart.introduction
-          ? SessionPart.deepening
-          : SessionPart.review;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => SessionPage(day: widget.day, part: nextPart),
-        ),
-      );
-    }
-  }
-
   bool _handleKeyEvent(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
     if (!mounted) return false;
     if (ModalRoute.of(context)?.isCurrent != true) return false;
 
-    // ESC: Eğitimden çık / Ana menüye dön
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       Navigator.of(context).pop();
       return true;
     }
 
-    // ENTER: Devam et (Yanlış bildirim paneli, bitiş ekranı, flashcard)
     if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.numpadEnter) {
       if (_isPartFinished) {
         _continueFromFinished();
         return true;
       }
-
       if (_showFeedback) {
         _nextQuestion();
         return true;
-      }
-
-      if (!_isLoading && _questions.isNotEmpty) {
-        final currentQ = _questions[_currentIndex];
-        if (currentQ.type == ExerciseType.flashcard) {
-          _onFlashcardNext();
-          return true;
-        }
       }
     }
 
@@ -245,110 +104,34 @@ class _SessionPageState extends State<SessionPage>
 
   Future<void> _loadPartQuestions() async {
     try {
-      await SpacedRepetitionService.setCurrentPart(widget.day, widget.part);
-      List<ExerciseQuestion> questions = [];
+      final words = await SpacedRepetitionService.getWordsForDay(widget.day);
+      _words = words;
 
-      switch (widget.part) {
-        case SessionPart.introduction:
-          final words =
-              await SpacedRepetitionService.getNewWordsForDay(widget.day);
-          _newWords = words;
-          questions = buildPart1Questions(words);
-          break;
-
-        case SessionPart.deepening:
-          final words =
-              await SpacedRepetitionService.getNewWordsForDay(widget.day);
-          _newWords = words;
-          questions = buildPart2Questions(words);
-          break;
-
-        case SessionPart.review:
-          final words =
-              await SpacedRepetitionService.getReviewWordsForDay(widget.day);
-          _newWords = words;
-          if (words.isEmpty) {
-            await SpacedRepetitionService.markPartCompleted(
-              widget.day,
-              SessionPart.review,
-              reviewCount: 0,
-            );
-            if (mounted) {
-              setState(() {
-                _questions = [];
-                _isLoading = false;
-                _isPartFinished = true;
-              });
-            }
-            return;
-          }
-          questions = buildPart3Questions(words);
-          break;
-
-        case SessionPart.bonus:
-          // Bonus: yanlış bilinen kelimeler ana sayfadan SpacedWord olarak gelemez,
-          // review listesinden yanlış olanları al.
-          final all =
-              await SpacedRepetitionService.getReviewWordsForDay(widget.day);
-          final newW =
-              await SpacedRepetitionService.getNewWordsForDay(widget.day);
-          final allWords = [...all, ...newW];
-          // day_progress'teki wrong_words_in_session listesi ile filtrele
-          final progress = await SpacedRepetitionService.getDayPartProgress(
-              widget.day);
-          final wrongIds = progress.wrongWordsInSession.toSet();
-          final wrongWords =
-              allWords.where((w) => wrongIds.contains(w.id)).toList();
-          _newWords = wrongWords;
-          questions = buildBonusQuestions(wrongWords);
-          break;
+      if (words.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _questions = [];
+            _isLoading = false;
+            _isPartFinished = true;
+          });
+        }
+        return;
       }
+
+      final questions = SpacedRepetitionService.buildPartQuestions(words, widget.part);
 
       if (mounted) {
         setState(() {
           _questions = questions;
           _isLoading = false;
         });
-        // İlk soruyu seslendir
         if (_questions.isNotEmpty) {
-          _speakCurrentQuestion(_questions[0]);
-          if (_questions[0].type != ExerciseType.flashcard) {
-            _focusWritingInput();
-          }
+          _focusWritingInput();
         }
       }
     } catch (e) {
       debugPrint('Error loading part questions: $e');
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // ─── TTS ─────────────────────────────────────────────────────────────────
-
-  void _speakCurrentQuestion(ExerciseQuestion q) {
-    switch (q.type) {
-      case ExerciseType.flashcard:
-        // Flashcard: otomatik TTS
-        Future.delayed(const Duration(milliseconds: 300), () {
-          TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
-        });
-        break;
-      case ExerciseType.enToTrWriting:
-        // EN→TR: kelimeyi söyle
-        Future.delayed(const Duration(milliseconds: 200), () {
-          TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
-        });
-        break;
-      case ExerciseType.listeningWriting:
-        // Dinleme modu: sadece ses
-        _listenCount = 1;
-        Future.delayed(const Duration(milliseconds: 400), () {
-          TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
-        });
-        break;
-      default:
-        // TR→EN, cloze, hinted: TTS otomatik çalışmaz
-        break;
     }
   }
 
@@ -360,41 +143,29 @@ class _SessionPageState extends State<SessionPage>
     if (answer.isEmpty) return;
 
     final q = _questions[_currentIndex];
-    bool isCorrect;
+    final bool isCorrect;
 
-    switch (q.type) {
-      case ExerciseType.trToEnWriting:
-      case ExerciseType.clozeWriting:
-      case ExerciseType.hintedWriting:
-      case ExerciseType.listeningWriting:
-        isCorrect = AnswerValidator.isEnglishCorrect(answer, q.wordEn);
-        break;
-      case ExerciseType.enToTrWriting:
-        isCorrect = AnswerValidator.isTurkishCorrect(answer, q.wordTr);
-        break;
-      case ExerciseType.flashcard:
-        isCorrect = true; // Flashcard'da cevap yok
-        break;
+    // EN cevap isteniyor → isEnglishCorrect, TR cevap → isTurkishCorrect
+    if (q.direction == AnswerDirection.toEnglish) {
+      isCorrect = AnswerValidator.isEnglishCorrect(answer, q.wordEn);
+    } else {
+      isCorrect = AnswerValidator.isTurkishCorrect(answer, q.wordTr);
     }
 
     _totalAnswered++;
 
-    // SRS güncelle (flashcard hariç)
-    if (q.type != ExerciseType.flashcard) {
-      SpacedRepetitionService.updateWordProgress(
-        q.wordId,
-        isCorrect,
-        activeDay: widget.day,
-      );
-    }
+    SpacedRepetitionService.updateWordProgress(
+      q.wordId,
+      isCorrect,
+      activeDay: widget.day,
+    );
 
     if (isCorrect) {
       _correctCount++;
       SoundService.playCorrect();
-      // TR→EN, cloze, hinted, listening: doğruysa İngilizce'yi seslendir
-      if (q.type != ExerciseType.enToTrWriting) {
-        TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
-      }
+      // Doğru cevapta → İngilizce kelimeyi seslendir
+      TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
+
       _flashTimer?.cancel();
       _transitionTimer?.cancel();
       setState(() {
@@ -404,52 +175,28 @@ class _SessionPageState extends State<SessionPage>
         _selectedAnswer = answer;
       });
       _flashTimer = Timer(const Duration(milliseconds: 400), () {
-        if (mounted) {
-          setState(() {
-            _correctStroke = false;
-          });
-        }
+        if (mounted) setState(() => _correctStroke = false);
       });
       _transitionTimer = Timer(const Duration(milliseconds: 650), () {
-        if (mounted) {
-          _nextQuestion();
-        }
+        if (mounted) _nextQuestion();
       });
     } else {
       SoundService.playWrong();
       _shakeController.forward(from: 0.0);
 
-      // Yanlış sayacı
       _wrongCountMap[q.wordId] = (_wrongCountMap[q.wordId] ?? 0) + 1;
 
       // Yanlış bilinen soruyu sona ekle
-      _questions.add(_makeQuestion(
-        SpacedWord(
-          id: q.wordId,
-          wordEn: q.wordEn,
-          wordTr: q.wordTr,
-          exampleSentence: q.sentenceEn,
-          exampleTr: q.sentenceTr,
-          nextReviewDate: DateTime.now(),
-          step: q.step,
-          isLearning: true,
-          assignedDay: widget.day,
-          dueDay: widget.day,
-        ),
-        q.type,
-        q.part,
-      ));
+      _questions.add(SpacedRepetitionService.buildRetryQuestion(q, widget.part));
 
       // False friend notu
       String? note;
-      final enteredMeaning =
-          SpacedRepetitionService.getWordMeaning(answer.toLowerCase());
-      if (enteredMeaning != null && enteredMeaning.isNotEmpty) {
-        note = "'$answer' → $enteredMeaning anlamına gelir.";
+      if (q.direction == AnswerDirection.toEnglish) {
+        final enteredMeaning = SpacedRepetitionService.getWordMeaning(answer.toLowerCase());
+        if (enteredMeaning != null && enteredMeaning.isNotEmpty) {
+          note = "'$answer' → $enteredMeaning anlamına gelir.";
+        }
       }
-
-      // Yanlış cevap feedback'inde kelimeyi söyle
-      TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
 
       _flashTimer?.cancel();
       setState(() {
@@ -461,11 +208,7 @@ class _SessionPageState extends State<SessionPage>
         _falseFriendNote = note;
       });
       _flashTimer = Timer(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          setState(() {
-            _wrongStroke = false;
-          });
-        }
+        if (mounted) setState(() => _wrongStroke = false);
       });
     }
   }
@@ -481,7 +224,6 @@ class _SessionPageState extends State<SessionPage>
     Future.delayed(const Duration(milliseconds: 100), tryFocus);
     Future.delayed(const Duration(milliseconds: 250), tryFocus);
     Future.delayed(const Duration(milliseconds: 400), tryFocus);
-    Future.delayed(const Duration(milliseconds: 550), tryFocus);
   }
 
   void _nextQuestion() {
@@ -504,66 +246,37 @@ class _SessionPageState extends State<SessionPage>
         _selectedAnswer = null;
         _falseFriendNote = null;
         _textController.clear();
-        _listenCount = 0;
       });
 
-      final next = _questions[_currentIndex];
-      _speakCurrentQuestion(next);
-
-      if (next.type != ExerciseType.flashcard) {
-        _focusWritingInput();
-      }
+      _focusWritingInput();
     } else {
       _finishPart();
     }
   }
 
   Future<void> _finishPart() async {
-    // Bonus tetikleme: seans boyunca 2+ kez yanlış bilinen kelimeler
-    final wrongWordIds = _wrongCountMap.entries
-        .where((e) => e.value >= 2)
-        .map((e) => e.key)
-        .toList();
-
-    if (wrongWordIds.isNotEmpty) {
-      await SpacedRepetitionService.updateWrongWordsInSession(
-          widget.day, wrongWordIds);
-    }
-
-    await SpacedRepetitionService.markPartCompleted(
-      widget.day,
-      widget.part,
-      reviewCount: widget.part == SessionPart.review ? _newWords.length : null,
-    );
-
-    bool skipPart3 = false;
-    if (widget.part == SessionPart.deepening) {
-      final reviewWords =
-          await SpacedRepetitionService.getReviewWordsForDay(widget.day);
-      if (reviewWords.isEmpty) {
-        await SpacedRepetitionService.markPartCompleted(
-          widget.day,
-          SessionPart.review,
-          reviewCount: 0,
-        );
-        skipPart3 = true;
-      }
-    }
-
+    await SpacedRepetitionService.markPartCompleted(widget.day, widget.part);
     SoundService.playFinish();
 
     if (mounted) {
-      setState(() {
-        _noReviewForPart3 = skipPart3;
-        _isPartFinished = true;
-      });
+      setState(() => _isPartFinished = true);
     }
   }
 
-  // ─── Flashcard Aksiyonu ───────────────────────────────────────────────────
+  void _continueFromFinished() {
+    final partNum = DayProgress.sessionPartToNumber(widget.part);
+    // Sonraki part var mı?
+    final nextPart = DayProgress.numberToSessionPart(partNum + 1);
 
-  void _onFlashcardNext() {
-    _nextQuestion();
+    if (nextPart == null) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => SessionPage(day: widget.day, part: nextPart),
+        ),
+      );
+    }
   }
 
   // ─── Build ───────────────────────────────────────────────────────────────
@@ -636,8 +349,7 @@ class _SessionPageState extends State<SessionPage>
                               child: child,
                             ),
                           ),
-                          child: _buildQuestionCard(q,
-                              key: ValueKey(_currentIndex)),
+                          child: _buildQuestionCard(q, key: ValueKey(_currentIndex)),
                         ),
                       ),
                     ),
@@ -646,15 +358,14 @@ class _SessionPageState extends State<SessionPage>
               ],
             ),
 
-            // Hata geri bildirim paneli
+            // Hata feedback paneli
             if (_showFeedback)
               Positioned(
                 bottom: 0,
                 left: 0,
                 right: 0,
                 child: TweenAnimationBuilder<Offset>(
-                  tween:
-                      Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero),
+                  tween: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero),
                   duration: const Duration(milliseconds: 240),
                   curve: Curves.easeOutCubic,
                   builder: (context, offset, child) => FractionalTranslation(
@@ -677,22 +388,19 @@ class _SessionPageState extends State<SessionPage>
     double progress = 0,
     SessionPart? part,
   }) {
-    final partLabels = {
-      SessionPart.introduction: 'Part 1 • Tanıtım',
-      SessionPart.deepening: 'Part 2 • Derinleştirme',
-      SessionPart.review: 'Part 3 • Tekrar',
-      SessionPart.bonus: 'Bonus • Zor Kelimeler',
-    };
-    final partColors = {
-      SessionPart.introduction: const Color(0xFF3A86FF),
-      SessionPart.deepening: const Color(0xFF7209B7),
-      SessionPart.review: const Color(0xFF00E676),
-      SessionPart.bonus: const Color(0xFFFFB703),
-    };
+    final partNum = part != null ? DayProgress.sessionPartToNumber(part) : 1;
+    final dayType = SpacedRepetitionService.getDayType(widget.day);
+    final dayLabel = dayType == DayType.review ? '🔄 Tekrar' : '📘 Öğrenme';
 
-    final label = part != null ? (partLabels[part] ?? '') : '';
-    final color =
-        part != null ? (partColors[part] ?? const Color(0xFF3A86FF)) : const Color(0xFF3A86FF);
+    final partColors = {
+      SessionPart.part1: const Color(0xFF3A86FF),
+      SessionPart.part2: const Color(0xFF7209B7),
+      SessionPart.part3: const Color(0xFF00E676),
+      SessionPart.part4: const Color(0xFFFFB703),
+    };
+    final color = part != null
+        ? (partColors[part] ?? const Color(0xFF3A86FF))
+        : const Color(0xFF3A86FF);
 
     return AppBar(
       backgroundColor: Colors.transparent,
@@ -706,14 +414,26 @@ class _SessionPageState extends State<SessionPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      'Part $partNum/4',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '• $dayLabel',
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 ClipRRect(
@@ -750,170 +470,184 @@ class _SessionPageState extends State<SessionPage>
 
   Widget _buildQuestionCard(ExerciseQuestion q, {required Key key}) {
     switch (q.type) {
-      case ExerciseType.flashcard:
-        return _buildFlashcardCard(q, key: key);
-      case ExerciseType.trToEnWriting:
-        return _buildTrToEnCard(q, key: key);
-      case ExerciseType.enToTrWriting:
-        return _buildEnToTrCard(q, key: key);
-      case ExerciseType.clozeWriting:
-        return _buildClozeCard(q, key: key);
-      case ExerciseType.listeningWriting:
-        return _buildListeningCard(q, key: key);
-      case ExerciseType.hintedWriting:
-        return _buildHintedCard(q, key: key);
+      case ExerciseType.sentenceEnWithTr:
+        return _buildSentenceEnWithTrCard(q, key: key);
+      case ExerciseType.sentenceEnWithEn:
+        return _buildSentenceEnWithEnCard(q, key: key);
+      case ExerciseType.sentenceTrWithEn:
+        return _buildSentenceTrWithEnCard(q, key: key);
+      case ExerciseType.sentenceTrWithTr:
+        return _buildSentenceTrWithTrCard(q, key: key);
     }
   }
 
-  // ─── Flashcard ────────────────────────────────────────────────────────────
+  // ─── Ortak Cümle Widget'ı ─────────────────────────────────────────────────
 
-  Widget _buildFlashcardCard(ExerciseQuestion q, {Key? key}) {
-    return Container(
-      key: key,
-      width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 520),
-      padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+  /// Cümleyi parantez içindeki kelimeyi vurgulayarak render eder.
+  Widget _buildHighlightedSentence(String sentence, Color highlightColor) {
+    // Parantez içindeki kısmı bul
+    final regex = RegExp(r'\(([^)]+)\)');
+    final match = regex.firstMatch(sentence);
+    if (match == null) {
+      return Text(
+        sentence,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 19,
+          fontWeight: FontWeight.w500,
+          height: 1.5,
+        ),
+      );
+    }
+
+    final before = sentence.substring(0, match.start);
+    final highlighted = match.group(1) ?? '';
+    final after = sentence.substring(match.end);
+
+    return RichText(
+      textAlign: TextAlign.center,
+      text: TextSpan(
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 19,
+          fontWeight: FontWeight.w500,
+          height: 1.5,
+        ),
         children: [
-          // İngilizce kelime + TTS butonu
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  q.wordEn,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _ttsButton(q.wordEn),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Türkçe anlam
-          Text(
-            q.wordTr,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF3A86FF),
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Örnek cümle (varsa)
-          if ((q.sentenceTr ?? '').isNotEmpty || (q.sentenceEn ?? '').isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0A1128),
-                borderRadius: BorderRadius.circular(16),
-                border:
-                    Border.all(color: const Color(0xFF1E2D4A), width: 1.5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if ((q.sentenceTr ?? '').isNotEmpty)
-                    Text(
-                      q.sentenceTr!,
-                      style: const TextStyle(
-                          color: Colors.white60,
-                          fontSize: 14,
-                          fontStyle: FontStyle.italic,
-                          height: 1.4),
-                    ),
-                  if ((q.sentenceTr ?? '').isNotEmpty &&
-                      (q.sentenceEn ?? '').isNotEmpty)
-                    const SizedBox(height: 6),
-                  if ((q.sentenceEn ?? '').isNotEmpty)
-                    Text(
-                      // Boşluğu doldurulmuş halde göster
-                      (q.sentenceEn ?? '').replaceAll('_____', q.wordEn),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          height: 1.4),
-                    ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 32),
-
-          // Öğrendim butonu
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _onFlashcardNext,
-              icon: const Icon(Icons.check_rounded, color: Colors.white),
-              label: const Text(
-                'Öğrendim, Devam',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3A86FF),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── TR → EN Yazma ────────────────────────────────────────────────────────
-
-  Widget _buildTrToEnCard(ExerciseQuestion q, {Key? key}) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-      key: key,
-      width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 520),
-      padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'İngilizcesini yazın',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            q.wordTr,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF3A86FF),
-              fontSize: 28,
+          TextSpan(text: before),
+          TextSpan(
+            text: '($highlighted)',
+            style: TextStyle(
+              color: highlightColor,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 32),
-          _buildWritingField(),
+          TextSpan(text: after),
         ],
       ),
     );
   }
 
-  // ─── EN → TR Yazma ────────────────────────────────────────────────────────
+  // ─── Tip 1: EN cümle + (Türkçe) → EN cevap ───────────────────────────────
 
-  Widget _buildEnToTrCard(ExerciseQuestion q, {Key? key}) {
+  Widget _buildSentenceEnWithTrCard(ExerciseQuestion q, {Key? key}) {
+    // Cümle: "The doctor cared for the (hasta)."
+    // Parantez içinde Türkçe kelime olacak şekilde düzenle
+    String sentence = q.sentenceEn ?? '';
+    if (sentence.isNotEmpty) {
+      // Orijinal İngilizce kelimeyi Türkçesiyle değiştir
+      final trWord = q.wordTr.split('/').first.trim();
+      sentence = sentence.replaceAll(
+        RegExp(r'\([^)]+\)'),
+        '($trWord)',
+      );
+    }
+
+    return _buildSentenceCard(
+      key: key,
+      instruction: 'İngilizcesini yazın',
+      sentence: sentence.isNotEmpty ? sentence : null,
+      fallbackWidget: sentence.isEmpty
+          ? _buildFallbackTrToEn(q)
+          : null,
+      highlightColor: const Color(0xFFFFB703),
+      isCorrect: _correctStroke,
+      isWrong: _wrongStroke,
+    );
+  }
+
+  // ─── Tip 2: EN cümle + (İngilizce) → TR cevap ───────────────────────────
+
+  Widget _buildSentenceEnWithEnCard(ExerciseQuestion q, {Key? key}) {
+    // Cümle: "The doctor cared for the (patient)."
+    // Parantez içinde İngilizce kelime
+    String sentence = q.sentenceEn ?? '';
+    if (sentence.isNotEmpty) {
+      sentence = sentence.replaceAll(
+        RegExp(r'\([^)]+\)'),
+        '(${q.wordEn})',
+      );
+    }
+
+    return _buildSentenceCard(
+      key: key,
+      instruction: 'Türkçe anlamını yazın',
+      sentence: sentence.isNotEmpty ? sentence : null,
+      fallbackWidget: sentence.isEmpty
+          ? _buildFallbackEnToTr(q)
+          : null,
+      highlightColor: const Color(0xFF3A86FF),
+      isCorrect: _correctStroke,
+      isWrong: _wrongStroke,
+      hintText: 'Türkçe anlamını yazın...',
+    );
+  }
+
+  // ─── Tip 3: TR cümle + (İngilizce) → TR cevap ───────────────────────────
+
+  Widget _buildSentenceTrWithEnCard(ExerciseQuestion q, {Key? key}) {
+    // Cümle: "Doktor (patient) ile yakından ilgilendi."
+    String sentence = q.sentenceTr ?? '';
+    if (sentence.isNotEmpty) {
+      sentence = sentence.replaceAll(
+        RegExp(r'\([^)]+\)'),
+        '(${q.wordEn})',
+      );
+    }
+
+    return _buildSentenceCard(
+      key: key,
+      instruction: 'Türkçe anlamını yazın',
+      sentence: sentence.isNotEmpty ? sentence : null,
+      fallbackWidget: sentence.isEmpty
+          ? _buildFallbackEnToTr(q)
+          : null,
+      highlightColor: const Color(0xFF3A86FF),
+      isCorrect: _correctStroke,
+      isWrong: _wrongStroke,
+      hintText: 'Türkçe anlamını yazın...',
+    );
+  }
+
+  // ─── Tip 4: TR cümle + (Türkçe) → EN cevap ──────────────────────────────
+
+  Widget _buildSentenceTrWithTrCard(ExerciseQuestion q, {Key? key}) {
+    // Cümle: "Doktor (hasta) ile yakından ilgilendi."
+    String sentence = q.sentenceTr ?? '';
+    if (sentence.isNotEmpty) {
+      final trWord = q.wordTr.split('/').first.trim();
+      sentence = sentence.replaceAll(
+        RegExp(r'\([^)]+\)'),
+        '($trWord)',
+      );
+    }
+
+    return _buildSentenceCard(
+      key: key,
+      instruction: 'İngilizcesini yazın',
+      sentence: sentence.isNotEmpty ? sentence : null,
+      fallbackWidget: sentence.isEmpty
+          ? _buildFallbackTrToEn(q)
+          : null,
+      highlightColor: const Color(0xFFFFB703),
+      isCorrect: _correctStroke,
+      isWrong: _wrongStroke,
+    );
+  }
+
+  // ─── Ortak Cümle Kart Yapısı ──────────────────────────────────────────────
+
+  Widget _buildSentenceCard({
+    Key? key,
+    required String instruction,
+    String? sentence,
+    Widget? fallbackWidget,
+    required Color highlightColor,
+    bool isCorrect = false,
+    bool isWrong = false,
+    String hintText = 'İngilizcesini yazın...',
+  }) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
@@ -921,216 +655,52 @@ class _SessionPageState extends State<SessionPage>
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
+      decoration: _cardDecoration(isCorrect: isCorrect, isWrong: isWrong),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'Türkçe anlamını yazın',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  q.wordEn,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _ttsButton(q.wordEn),
-            ],
-          ),
-          const SizedBox(height: 32),
-          _buildWritingField(hintText: 'Türkçe anlamını yazın...'),
-        ],
-      ),
-    );
-  }
-
-  // ─── Cümle Boşluk (Yazma) ────────────────────────────────────────────────
-
-  Widget _buildClozeCard(ExerciseQuestion q, {Key? key}) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-      key: key,
-      width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 520),
-      padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'Boşluğu doldurun',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-
-          // Türkçe cümle ipucu
-          if ((q.sentenceTr ?? '').isNotEmpty)
-            Text(
-              q.sentenceTr!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white60,
-                fontSize: 15,
-                fontStyle: FontStyle.italic,
-                height: 1.4,
-              ),
-            ),
-          const SizedBox(height: 12),
-
-          // İngilizce cümle boşluklu
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  q.sentenceEn ?? '_____',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w500,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-              _ttsButton(
-                (q.sentenceEn ?? '_____')
-                    .replaceAll('_____', q.wordEn),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          _buildWritingField(),
-        ],
-      ),
-    );
-  }
-
-  // ─── Dinleme → Yazma ─────────────────────────────────────────────────────
-
-  Widget _buildListeningCard(ExerciseQuestion q, {Key? key}) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-      key: key,
-      width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 520),
-      padding: const EdgeInsets.all(32),
-      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Büyük hoparlör ikonu
-          GestureDetector(
-            onTap: _listenCount < _maxListenCount
-                ? () {
-                    setState(() => _listenCount++);
-                    TtsService.speak(AnswerValidator.cleanForTts(q.wordEn));
-                  }
-                : null,
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: const Color(0xFF3A86FF).withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: const Color(0xFF3A86FF).withValues(alpha: 0.4),
-                  width: 2,
-                ),
-              ),
-              child: Icon(
-                Icons.volume_up_rounded,
-                color: _listenCount < _maxListenCount
-                    ? const Color(0xFF3A86FF)
-                    : Colors.white24,
-                size: 52,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
           Text(
-            _listenCount < _maxListenCount
-                ? 'Tekrar dinlemek için dokun (${_maxListenCount - _listenCount} kez)'
-                : 'Maksimum dinleme sayısına ulaştın',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.4),
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Duyduğun İngilizce kelimeyi yaz',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 32),
-          _buildWritingField(),
-        ],
-      ),
-    );
-  }
-
-  // ─── İpuçlu Yazma ────────────────────────────────────────────────────────
-
-  Widget _buildHintedCard(ExerciseQuestion q, {Key? key}) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-      key: key,
-      width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 520),
-      padding: const EdgeInsets.all(28),
-      decoration: _cardDecoration(isCorrect: _correctStroke, isWrong: _wrongStroke),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'İngilizcesini yazın',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            q.wordTr,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF3A86FF),
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-            ),
+            instruction,
+            style: const TextStyle(color: Colors.white54, fontSize: 13),
           ),
           const SizedBox(height: 20),
 
-          // İlk harf ipucu
-          Text(
-            q.hintText,
-            style: const TextStyle(
-              color: Color(0xFF00B4D8),
-              fontSize: 26,
-              letterSpacing: 5,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          if (sentence != null)
+            _buildHighlightedSentence(sentence, highlightColor)
+          else
+            ?fallbackWidget,
+
           const SizedBox(height: 32),
-          _buildWritingField(),
+          _buildWritingField(hintText: hintText),
         ],
+      ),
+    );
+  }
+
+  // ─── Fallback Widget'ları (cümle yoksa) ──────────────────────────────────
+
+  /// Cümle yoksa: sadece Türkçe kelimeyi göster, İngilizce iste
+  Widget _buildFallbackTrToEn(ExerciseQuestion q) {
+    return Text(
+      q.wordTr,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: Color(0xFFFFB703),
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  /// Cümle yoksa: sadece İngilizce kelimeyi göster, Türkçe iste
+  Widget _buildFallbackEnToTr(ExerciseQuestion q) {
+    return Text(
+      q.wordEn,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: Color(0xFF3A86FF),
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
       ),
     );
   }
@@ -1178,10 +748,9 @@ class _SessionPageState extends State<SessionPage>
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed:
-                (!_isCorrect && !_showFeedback)
-                    ? () => _checkAnswer(_textController.text)
-                    : null,
+            onPressed: (!_isCorrect && !_showFeedback)
+                ? () => _checkAnswer(_textController.text)
+                : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF3A86FF),
               disabledBackgroundColor: const Color(0xFF1E2D4A),
@@ -1205,6 +774,10 @@ class _SessionPageState extends State<SessionPage>
   // ─── Feedback Paneli ──────────────────────────────────────────────────────
 
   Widget _buildFeedbackPanel(ExerciseQuestion q) {
+    final correctAnswer = q.direction == AnswerDirection.toEnglish
+        ? q.wordEn
+        : q.wordTr;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: const BoxDecoration(
@@ -1225,8 +798,7 @@ class _SessionPageState extends State<SessionPage>
                     color: Colors.redAccent.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
-                  child:
-                      const Icon(Icons.close_rounded, color: Colors.redAccent),
+                  child: const Icon(Icons.close_rounded, color: Colors.redAccent),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -1271,9 +843,7 @@ class _SessionPageState extends State<SessionPage>
                                       color: Colors.white60, fontSize: 16),
                                 ),
                                 TextSpan(
-                                  text: q.type == ExerciseType.enToTrWriting
-                                      ? q.wordTr
-                                      : q.wordEn,
+                                  text: correctAnswer,
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
@@ -1283,6 +853,7 @@ class _SessionPageState extends State<SessionPage>
                               ]),
                             ),
                           ),
+                          // Hoparlör sadece feedback panelinde görünür
                           IconButton(
                             icon: const Icon(Icons.volume_up_rounded,
                                 color: Colors.white60),
@@ -1305,8 +876,7 @@ class _SessionPageState extends State<SessionPage>
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: Colors.orange.withValues(alpha: 0.3)),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1354,32 +924,17 @@ class _SessionPageState extends State<SessionPage>
   // ─── Part Bitti Ekranı ────────────────────────────────────────────────────
 
   Widget _buildPartFinishedView() {
-    final partLabels = {
-      SessionPart.introduction: 'Part 1 Bitti 🎉',
-      SessionPart.deepening: 'Part 2 Bitti 🎉',
-      SessionPart.review: 'Part 3 Bitti 🎉',
-      SessionPart.bonus: 'Bonus Bitti 🎉',
-    };
+    final partNum = DayProgress.sessionPartToNumber(widget.part);
+    final nextPart = DayProgress.numberToSessionPart(partNum + 1);
+    final bool hasNextPart = nextPart != null;
+
     final partColors = {
-      SessionPart.introduction: const Color(0xFF3A86FF),
-      SessionPart.deepening: const Color(0xFF7209B7),
-      SessionPart.review: const Color(0xFF00E676),
-      SessionPart.bonus: const Color(0xFFFFB703),
+      SessionPart.part1: const Color(0xFF3A86FF),
+      SessionPart.part2: const Color(0xFF7209B7),
+      SessionPart.part3: const Color(0xFF00E676),
+      SessionPart.part4: const Color(0xFFFFB703),
     };
-    final bool hasNextPart = !(widget.part == SessionPart.review ||
-        widget.part == SessionPart.bonus ||
-        _noReviewForPart3);
-
-    final nextPartLabels = {
-      SessionPart.introduction: 'Part 2\'ye Geç',
-      SessionPart.deepening: _noReviewForPart3 ? 'Ana Menüye Dön' : 'Part 3\'e Geç',
-      SessionPart.review: 'Ana Menüye Dön',
-      SessionPart.bonus: 'Ana Menüye Dön',
-    };
-
-    final title = partLabels[widget.part] ?? 'Tamamlandı!';
     final color = partColors[widget.part] ?? const Color(0xFF3A86FF);
-    final nextLabel = nextPartLabels[widget.part] ?? 'Ana Menüye Dön';
     final accuracy = _totalAnswered > 0
         ? ((_correctCount / _totalAnswered) * 100).round()
         : 100;
@@ -1411,12 +966,11 @@ class _SessionPageState extends State<SessionPage>
                         ),
                       ],
                     ),
-                    child: Icon(Icons.emoji_events_rounded,
-                        color: color, size: 48),
+                    child: Icon(Icons.emoji_events_rounded, color: color, size: 48),
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    title,
+                    hasNextPart ? 'Part $partNum Bitti 🎉' : 'Gün Tamamlandı! 🏆',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 26,
@@ -1425,40 +979,12 @@ class _SessionPageState extends State<SessionPage>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _newWords.isEmpty
-                        ? 'Bugün için tekrar edilecek kelime bulunmuyor.'
-                        : '${_newWords.length} kelime üzerinde çalışıldı',
+                    _words.isEmpty
+                        ? 'Bugün için kelime bulunamadı.'
+                        : '${_words.length} kelime üzerinde çalışıldı',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white60, fontSize: 15),
                   ),
-                  if (_noReviewForPart3) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00E676).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: const Color(0xFF00E676).withValues(alpha: 0.3)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle_rounded,
-                              color: Color(0xFF00E676), size: 16),
-                          SizedBox(width: 8),
-                          Text(
-                            'Bugün tekrar kelimesi olmadığı için Part 3 tamamlandı.',
-                            style: TextStyle(
-                              color: Color(0xFF00E676),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 28),
 
                   // İstatistik
@@ -1472,13 +998,13 @@ class _SessionPageState extends State<SessionPage>
                               const Color(0xFF3A86FF))),
                       const SizedBox(width: 12),
                       Expanded(
-                          child: _statCard(Icons.speed_rounded,
-                              '%$accuracy', 'Başarı', color)),
+                          child: _statCard(
+                              Icons.speed_rounded, '%$accuracy', 'Başarı', color)),
                       const SizedBox(width: 12),
                       Expanded(
                           child: _statCard(
                               Icons.auto_stories_rounded,
-                              '${_newWords.length}',
+                              '${_words.length}',
                               'Kelime',
                               const Color(0xFFFFB703))),
                     ],
@@ -1486,10 +1012,10 @@ class _SessionPageState extends State<SessionPage>
                   const SizedBox(height: 28),
 
                   // Günün kelimeleri listesi
-                  if (_newWords.isNotEmpty) ...[
+                  if (_words.isNotEmpty) ...[
                     _sectionHeader('Kelimeler'),
                     const SizedBox(height: 12),
-                    ..._newWords.map((w) => _wordListTile(w)),
+                    ..._words.map((w) => _wordListTile(w)),
                     const SizedBox(height: 24),
                   ],
 
@@ -1505,7 +1031,7 @@ class _SessionPageState extends State<SessionPage>
                             borderRadius: BorderRadius.circular(16)),
                       ),
                       child: Text(
-                        nextLabel,
+                        hasNextPart ? 'Part ${partNum + 1}\'e Geç' : 'Ana Menüye Dön',
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -1527,8 +1053,7 @@ class _SessionPageState extends State<SessionPage>
                               borderRadius: BorderRadius.circular(16)),
                         ),
                         child: const Text('Ana Menüye Dön',
-                            style: TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w600)),
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                       ),
                     ),
                   ],
@@ -1545,19 +1070,13 @@ class _SessionPageState extends State<SessionPage>
 
   BoxDecoration _cardDecoration({bool isCorrect = false, bool isWrong = false}) {
     Color borderColor = const Color(0xFF1E2D4A);
-    if (isCorrect) {
-      borderColor = const Color(0xFF4CAF50);
-    } else if (isWrong) {
-      borderColor = Colors.redAccent;
-    }
+    if (isCorrect) borderColor = const Color(0xFF4CAF50);
+    if (isWrong) borderColor = Colors.redAccent;
 
     return BoxDecoration(
       color: const Color(0xFF131D36),
       borderRadius: BorderRadius.circular(28),
-      border: Border.all(
-        color: borderColor,
-        width: 2,
-      ),
+      border: Border.all(color: borderColor, width: 2),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.18),
@@ -1577,22 +1096,6 @@ class _SessionPageState extends State<SessionPage>
             spreadRadius: 1,
           ),
       ],
-    );
-  }
-
-
-  Widget _ttsButton(String text) {
-    return GestureDetector(
-      onTap: () => TtsService.speak(AnswerValidator.cleanForTts(text)),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF3A86FF).withValues(alpha: 0.15),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.volume_up_rounded,
-            color: Color(0xFF3A86FF), size: 22),
-      ),
     );
   }
 
@@ -1670,8 +1173,7 @@ class _SessionPageState extends State<SessionPage>
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      _pickSingleSentence(w.exampleSentence!)
-                          .replaceAll('_____', w.wordEn),
+                      (w.exampleSentence ?? '').split('/').first.trim(),
                       style: const TextStyle(
                           color: Colors.white38,
                           fontSize: 12,
