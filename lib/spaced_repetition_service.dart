@@ -584,25 +584,26 @@ class SpacedRepetitionService {
       final collection = _userWordsCollection();
       if (collection == null) return [];
 
-      // Yeni kelimeler (bugüne atanan)
-      final newSnap = await collection.where('assigned_day', isEqualTo: day).get();
-      final newWords = newSnap.docs
-          .map((doc) => SpacedWord.fromMap(doc.id, doc.data()))
-          .take(newWordsPerDay)
-          .toList();
+      final snap = await collection.get();
+      final List<SpacedWord> newWords = [];
+      final List<SpacedWord> reviewWords = [];
 
-      // Due olan eski kelimeler (bugünden önceki, vadesi gelmiş)
-      final reviewSnap = await collection
-          .where('assigned_day', isLessThan: day)
-          .where('due_day', isLessThanOrEqualTo: day)
-          .get();
-      final reviewWords = reviewSnap.docs
-          .map((doc) => SpacedWord.fromMap(doc.id, doc.data()))
-          .toList()
-        ..sort((a, b) => a.step.compareTo(b.step)); // En düşük step önce
+      for (var doc in snap.docs) {
+        final w = SpacedWord.fromMap(doc.id, doc.data());
+        if (w.assignedDay == day) {
+          newWords.add(w);
+        } else if (w.assignedDay < day && w.dueDay <= day) {
+          reviewWords.add(w);
+        }
+      }
+
+      reviewWords.sort((a, b) => a.step.compareTo(b.step)); // En düşük step önce
 
       // Toplam yük: yeni + max 5 eski kelime
-      final combined = [...newWords, ...reviewWords.take(5)];
+      final combined = [
+        ...newWords.take(newWordsPerDay),
+        ...reviewWords.take(5),
+      ];
       return combined;
     } else {
       // Tekrar günü: sadece eskiler
